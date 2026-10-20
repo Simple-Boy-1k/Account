@@ -1,0 +1,36 @@
+{
+  "name": "Telegram AI Userbot",
+  "description": "Telegram Auto Reply AI Userbot with String Session",
+  "keywords": ["telegram", "userbot", "pyrogram", "ai", "openai"],
+  "repository": "https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME",
+  "website": "https://telegram.org",
+  "env": {
+    "API_ID": {
+      "description": "Aapka Telegram API ID (my.telegram.org se lein)",
+      "required": true
+    },
+    "API_HASH": {
+      "description": "Aapka Telegram API Hash",
+      "required": true
+    },
+    "SESSION_STRING": {
+      "description": "Pyrogram String Session (Userbot Login Ke Liye)",
+      "required": true
+    },
+    "OPENAI_API_KEY": {
+      "description": "Aapki OpenAI API Key (platform.openai.com)",
+      "required": true
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    }
+  ],
+  "formation": {
+    "worker": {
+      "quantity": 1,
+      "size": "eco"
+    }
+  }
+}
