@@ -1,7 +1,7 @@
 {
-  "name": "Telegram AI Userbot",
-  "description": "Telegram Auto Reply AI Userbot with Config Setup",
-  "keywords": ["telegram", "userbot", "pyrogram", "ai", "openai"],
+  "name": "Telegram Gemini AI Userbot",
+  "description": "Telegram Auto Reply Userbot Powered by Gemini API with Config Setup",
+  "keywords": ["telegram", "userbot", "pyrogram", "gemini", "ai"],
   "repository": "https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME",
   "website": "https://telegram.org",
   "env": {
@@ -17,8 +17,8 @@
       "description": "Pyrogram String Session (Userbot Login Ke Liye)",
       "required": true
     },
-    "OPENAI_API_KEY": {
-      "description": "Aapki OpenAI API Key (platform.openai.com)",
+    "GEMINI_API_KEY": {
+      "description": "Aapki Gemini API Key (aistudio.google.com se lein)",
       "required": true
     },
     "SYSTEM_PROMPT": {
