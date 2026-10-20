@@ -1,24 +1,23 @@
-import os
 import asyncio
 from pyrogram import Client, filters
 from pyrogram.types import Message
 import openai
 
-API_ID = int(os.environ.get("API_ID", 0))
-API_HASH = os.environ.get("API_HASH", "")
-SESSION_STRING = os.environ.get("SESSION_STRING", "")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+# Config file import kar rahe hain
+from config import Config
 
-openai.api_key = OPENAI_API_KEY
+# OpenAI Key Setup
+openai.api_key = Config.OPENAI_API_KEY
 
+# Pyrogram Client Setup
 app = Client(
     name="ai_userbot",
-    api_id=API_ID,
-    api_hash=API_HASH,
-    session_string=SESSION_STRING
+    api_id=Config.API_ID,
+    api_hash=Config.API_HASH,
+    session_string=Config.SESSION_STRING
 )
 
-# AI Auto-Reply Switch State (Default: OFF)
+# AI Auto-Reply Switch (Default: OFF)
 AI_ENABLED = False
 
 @app.on_message(filters.me & filters.command("aion", prefixes="."))
@@ -45,7 +44,7 @@ async def auto_reply(client: Client, message: Message):
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "Aap ek friendly AI assistant ho jo mere behalf par polite aur natural tareeke se Hindi/Hinglish me reply karta hai."},
+                {"role": "system", "content": Config.SYSTEM_PROMPT},
                 {"role": "user", "content": message.text}
             ]
         )
@@ -55,5 +54,5 @@ async def auto_reply(client: Client, message: Message):
         print(f"Error generating AI reply: {e}")
 
 if __name__ == "__main__":
-    print("Userbot is starting on Heroku...")
+    print("Userbot is starting on Heroku using config...")
     app.run()
