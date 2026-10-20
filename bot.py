@@ -1,15 +1,19 @@
+import os
 import asyncio
 from pyrogram import Client, filters
 from pyrogram.types import Message
-import openai
+import google.generativeai as genai
 
-# Config file import kar rahe hain
 from config import Config
 
-# OpenAI Key Setup
-openai.api_key = Config.OPENAI_API_KEY
+# Gemini API Configure karna
+genai.configure(api_key=Config.GEMINI_API_KEY)
 
-# Pyrogram Client Setup
+model = genai.GenerativeModel(
+    model_name="gemini-1.5-flash",
+    system_instruction=Config.SYSTEM_PROMPT
+)
+
 app = Client(
     name="ai_userbot",
     api_id=Config.API_ID,
@@ -17,42 +21,34 @@ app = Client(
     session_string=Config.SESSION_STRING
 )
 
-# AI Auto-Reply Switch (Default: OFF)
 AI_ENABLED = False
 
 @app.on_message(filters.me & filters.command("aion", prefixes="."))
 async def turn_on_ai(client: Client, message: Message):
     global AI_ENABLED
     AI_ENABLED = True
-    await message.edit_text("✅ **AI Auto-Reply System Activated!**")
+    await message.edit_text("✅ **Gemini AI Auto-Reply Activated!**")
 
 @app.on_message(filters.me & filters.command("aioff", prefixes="."))
 async def turn_off_ai(client: Client, message: Message):
     global AI_ENABLED
     AI_ENABLED = False
-    await message.edit_text("❌ **AI Auto-Reply System Deactivated!**")
+    await message.edit_text("❌ **Gemini AI Auto-Reply Deactivated!**")
 
-@app.on_message(filters.private & ~filters.me & ~filters.bot)
+# Strict filter: Sirf Private chats, non-bot, non-channel, non-group messages par chalega
+@app.on_message(filters.private & ~filters.me & ~filters.bot & ~filters.channel & ~filters.group)
 async def auto_reply(client: Client, message: Message):
     global AI_ENABLED
-    if not AI_ENABLED:
+    if not AI_ENABLED or not message.text:
         return
 
-    await client.send_chat_action(message.chat.id, "typing")
-
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": Config.SYSTEM_PROMPT},
-                {"role": "user", "content": message.text}
-            ]
-        )
-        reply_text = response.choices[0].message.content
-        await message.reply_text(reply_text)
+        await client.send_chat_action(message.chat.id, "typing")
+        response = model.generate_content(message.text)
+        await message.reply_text(response.text)
     except Exception as e:
-        print(f"Error generating AI reply: {e}")
+        print(f"Gemini API / Peer Error: {e}")
 
 if __name__ == "__main__":
-    print("Userbot is starting on Heroku using config...")
+    print("Gemini AI Userbot is starting...")
     app.run()
