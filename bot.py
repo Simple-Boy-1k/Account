@@ -68,22 +68,29 @@ for uid_str, uinfo in saved_db.items():
         "active_chats": set(uinfo.get("active_chats", []))
     }
 
-def add_user_log(user_id, message, is_error=False):
+def add_user_log(user_id, message, log_type="info"):
     timestamp = datetime.now().strftime("%H:%M:%S")
-    log_entry = f"[{timestamp}] {message}"
+    if log_type == "error":
+        emoji_icon = "🔴"
+        term_color = RED
+    elif log_type == "success":
+        emoji_icon = "🟢"
+        term_color = GREEN
+    elif log_type == "warn":
+        emoji_icon = "🟡"
+        term_color = YELLOW
+    else:
+        emoji_icon = "🔵"
+        term_color = CYAN
+
+    log_entry = f"[{timestamp}] {emoji_icon} {message}"
     if user_id not in user_logs:
         user_logs[user_id] = []
     user_logs[user_id].append(log_entry)
     if len(user_logs[user_id]) > 25:
         user_logs[user_id].pop(0)
     
-    # Print with color in terminal
-    if is_error or "Glitch" in message or "Error" in message or "Failed" in message:
-        print(f"{RED}User {user_id} -> {log_entry}{RESET}")
-    elif "Online" in message or "Success" in message or "Activated" in message:
-        print(f"{GREEN}User {user_id} -> {log_entry}{RESET}")
-    else:
-        print(f"{CYAN}User {user_id} -> {log_entry}{RESET}")
+    print(f"{term_color}User {user_id} -> {log_entry}{RESET}")
 
 FORCE_CHANNEL = os.getenv("FORCE_CHANNEL", "@YourChannelName")
 OWNER_ID = int(os.getenv("OWNER_ID", "0"))
@@ -134,8 +141,9 @@ async def check_subscription(bot, user_id):
         print(f"{RED}Force Sub Check Error: {e}{RESET}")
     return False
 
-def generate_ai_response_safely(ai_client, text, sys_prompt):
-    models_to_try = ["gemini-3.8-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+def generate_ai_response_safely(ai_client, text, sys_prompt, user_id=None):
+    # Using real valid models to prevent silent failures
+    models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
     for model_name in models_to_try:
         try:
             response = ai_client.models.generate_content(
@@ -144,9 +152,14 @@ def generate_ai_response_safely(ai_client, text, sys_prompt):
                 config=types.GenerateContentConfig(system_instruction=sys_prompt)
             )
             if response and response.text:
+                if user_id:
+                    add_user_log(user_id, f"Gemini AI Success [{model_name}]", "success")
                 return response.text
         except Exception as err:
-            print(f"{YELLOW}Model {model_name} failed/busy: {err}{RESET}")
+            err_msg = str(err)
+            if user_id:
+                add_user_log(user_id, f"Model {model_name} Error: {err_msg}", "error")
+            print(f"{YELLOW}Model {model_name} failed: {err_msg}{RESET}")
             continue
     return None
 
@@ -168,17 +181,16 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
             if "active_chats" not in user_data[user_id]:
                 user_data[user_id]["active_chats"] = set()
 
-            # Connect explicitly to catch session errors immediately
             await client.connect()
             if not await client.is_user_authorized():
-                add_user_log(user_id, "Session String Expired or Invalid! Please re-enter setup data.", is_error=True)
+                add_user_log(user_id, "Session String Expired or Invalid! Re-enter setup.", "error")
                 user_data[user_id]["is_active"] = False
                 save_db()
                 break
 
             user_data[user_id]["is_active"] = True
             save_db()
-            add_user_log(user_id, "Account Online & Connected to Telegram!")
+            add_user_log(user_id, "Account Online & Connected to Telegram!", "success")
 
             me = await client.get_me()
             my_id = me.id
@@ -194,9 +206,9 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                 save_db()
                 mode = user_data.get(user_id, {}).get("reply_mode", "TAG_ONLY")
                 ai_type = user_data.get(user_id, {}).get("ai_type", "GEMINI_AI")
-                add_user_log(user_id, f"Activated in Chat {chat_id} (Mode: {mode}, Type: {ai_type})")
+                add_user_log(user_id, f"Activated in Chat {chat_id} (Filter: {mode}, Engine: {ai_type})", "success")
                 try:
-                    await event.edit(f"🟩 **[ACTIVATED] Mode: {mode} | Engine: {ai_type}**")
+                    await event.edit(f"🟩 **[ACTIVATED] Filter: {mode} | Engine: {ai_type}**")
                 except:
                     pass
 
@@ -206,7 +218,7 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                 if chat_id in user_data[user_id]["active_chats"]:
                     user_data[user_id]["active_chats"].remove(chat_id)
                     save_db()
-                add_user_log(user_id, f"Deactivated in Chat: {chat_id}")
+                add_user_log(user_id, f"Deactivated in Chat: {chat_id}", "warn")
                 try:
                     await event.edit("🟥 **[STOPPED] Auto-Reply Turned OFF for THIS Group!**")
                 except:
@@ -251,7 +263,7 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                         return
 
                 reply_text = None
-                add_user_log(user_id, f"Processing Msg in Chat {chat_id}: '{event.raw_text}'")
+                add_user_log(user_id, f"Incoming Msg in Chat {chat_id}: '{event.raw_text}'", "info")
 
                 try:
                     if ai_type == "GEMINI_AI" and ai_client:
@@ -266,30 +278,33 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                         )
 
                         await asyncio.sleep(0.5)
-                        reply_text = generate_ai_response_safely(ai_client, event.raw_text, sys_prompt)
+                        reply_text = generate_ai_response_safely(ai_client, event.raw_text, sys_prompt, user_id)
                         if not reply_text:
+                            add_user_log(user_id, "Gemini API failed -> Using Fallback Msg", "warn")
                             reply_text = random.choice(SMART_FALLBACKS)
                     else:
+                        if ai_type == "GEMINI_AI" and not ai_client:
+                            add_user_log(user_id, "Gemini API Key missing! Switched to Normal Message.", "error")
                         await asyncio.sleep(0.5)
                         reply_text = random.choice(SMART_FALLBACKS)
 
                 except Exception as api_err:
-                    add_user_log(user_id, f"Exception Handled -> Using Normal Msg: {api_err}", is_error=True)
+                    add_user_log(user_id, f"Exception Error -> {api_err}", "error")
                     reply_text = random.choice(SMART_FALLBACKS)
 
                 if reply_text:
                     try:
                         await event.reply(reply_text)
-                        add_user_log(user_id, f"Reply Sent Successfully!")
+                        add_user_log(user_id, "Reply Sent Successfully!", "success")
                     except Exception as send_err:
-                        add_user_log(user_id, f"Send Error: {send_err}", is_error=True)
+                        add_user_log(user_id, f"Send Error: {send_err}", "error")
                         await asyncio.sleep(2)
 
             running_userbots[user_id] = client
             await client.run_until_disconnected()
             
         except Exception as e:
-            add_user_log(user_id, f"Connection Glitch: {e}. Auto-reconnecting in 5 seconds...", is_error=True)
+            add_user_log(user_id, f"Connection Glitch: {e}. Reconnecting in 5s...", "error")
             if client:
                 try:
                     await client.disconnect()
@@ -309,7 +324,7 @@ async def stop_userbot(user_id):
     if user_id in user_data:
         user_data[user_id]["is_active"] = False
         save_db()
-    add_user_log(user_id, "Hosting Deactivated by User.")
+    add_user_log(user_id, "Hosting Deactivated by User.", "warn")
 
 def get_user_panel_markup(user_id):
     is_active = user_data.get(user_id, {}).get("is_active", False)
@@ -320,14 +335,15 @@ def get_user_panel_markup(user_id):
     keyboard = []
     
     if is_active and has_session:
-        keyboard.append([InlineKeyboardButton("Stop Hosting 🟥", callback_data="deactivate_host")])
-        keyboard.append([InlineKeyboardButton("🟩 STATUS: HOSTING ACTIVE 🟩", callback_data="status_info")])
+        keyboard.append([InlineKeyboardButton("🔴 Stop Hosting Bot", callback_data="deactivate_host")])
+        keyboard.append([InlineKeyboardButton("🟢 Status: Hosting Active", callback_data="status_info")])
     else:
-        keyboard.append([InlineKeyboardButton("Start Hosting 🟩", callback_data="activate_host")])
-        keyboard.append([InlineKeyboardButton("🟥 STATUS: DEACTIVATED 🟥", callback_data="status_info")])
+        keyboard.append([InlineKeyboardButton("🟢 Start Hosting Bot", callback_data="activate_host")])
+        keyboard.append([InlineKeyboardButton("🔴 Status: Deactivated", callback_data="status_info")])
     
-    mode_btn_text = "🏷️ FILTER: TAG ONLY" if reply_mode == "TAG_ONLY" else "💬 FILTER: ALL MESSAGES"
-    ai_btn_text = "🤖 ENGINE: GEMINI AI" if ai_type == "GEMINI_AI" else "💬 ENGINE: NORMAL MSG"
+    # Clear, professional and understandable button names
+    mode_btn_text = "🏷️ Filter: Tag Only (Mention)" if reply_mode == "TAG_ONLY" else "💬 Filter: All Messages"
+    ai_btn_text = "🤖 Engine: Gemini AI Smart" if ai_type == "GEMINI_AI" else "💬 Engine: Normal Messages"
     
     keyboard.append([
         InlineKeyboardButton(mode_btn_text, callback_data="toggle_reply_mode"),
@@ -335,14 +351,14 @@ def get_user_panel_markup(user_id):
     ])
     
     keyboard.append([
-        InlineKeyboardButton("🟦 LIVE LOGS 🟦", callback_data="view_my_logs"),
-        InlineKeyboardButton("🟩 TEST AI KEY 🟩", callback_data="test_ai")
+        InlineKeyboardButton("📋 View Real-Time Logs", callback_data="view_my_logs"),
+        InlineKeyboardButton("⚡ Test Gemini API Key", callback_data="test_ai")
     ])
 
-    keyboard.append([InlineKeyboardButton("🟧 RE-ENTER SETUP DATA 🟧", callback_data="start_setup")])
+    keyboard.append([InlineKeyboardButton("⚙️ Re-Enter API & Session Setup", callback_data="start_setup")])
 
     if OWNER_ID and user_id == OWNER_ID:
-        keyboard.append([InlineKeyboardButton("👑 OWNER CONTROL PANEL 👑", callback_data="owner_panel")])
+        keyboard.append([InlineKeyboardButton("👑 Owner Admin Panel", callback_data="owner_panel")])
         
     return InlineKeyboardMarkup(keyboard)
 
@@ -352,8 +368,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_subbed = await check_subscription(context.bot, user_id)
     if not is_subbed:
         keyboard = [
-            [InlineKeyboardButton("🟦 JOIN OFFICIAL CHANNEL 🟦", url=f"https://t.me/{FORCE_CHANNEL.replace('@', '')}")],
-            [InlineKeyboardButton("🟩 VERIFY SUBSCRIPTION 🟩", callback_data="check_sub")]
+            [InlineKeyboardButton("🟦 Join Official Channel", url=f"https://t.me/{FORCE_CHANNEL.replace('@', '')}")],
+            [InlineKeyboardButton("🟩 Verify Subscription", callback_data="check_sub")]
         ]
         await update.message.reply_text(
             "🟥 **ACCESS DENIED!**\n\nPehle official channel join karein!",
@@ -363,7 +379,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = (
         "👋 **Welcome to VIP AI Userbot Control Panel!**\n\n"
-        "Control Panel se manage karein:"
+        "Yahan se aap apne bot ki settings aur engines ko manage kar sakte hain:"
     )
     await update.message.reply_text(text, reply_markup=get_user_panel_markup(user_id))
 
@@ -386,7 +402,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await stop_userbot(user_id)
         try:
             await query.edit_message_text(
-                "🟥 **HOSTING DEACTIVATED!**\n\nUserbot ab off hai.",
+                "🔴 **HOSTING DEACTIVATED!**\n\nUserbot ab off hai.",
                 reply_markup=get_user_panel_markup(user_id)
             )
         except Exception as e:
@@ -408,13 +424,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             try:
                 await query.edit_message_text(
-                    "🟩 **HOSTING ACTIVATED SUCCESSFULLY!**",
+                    "🟢 **HOSTING ACTIVATED SUCCESSFULLY!**",
                     reply_markup=get_user_panel_markup(user_id)
                 )
             except Exception as e:
                 print(f"{RED}Edit error: {e}{RESET}")
         else:
-            await query.answer("❌ Pehle 'RE-ENTER SETUP DATA' par click karke details submit karein!", show_alert=True)
+            await query.answer("❌ Pehle 'Re-Enter API & Session Setup' par click karke details submit karein!", show_alert=True)
 
     elif query.data == "toggle_reply_mode":
         current_mode = user_data.get(user_id, {}).get("reply_mode", "TAG_ONLY")
@@ -446,26 +462,26 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         uinfo = user_data.get(user_id, {})
         key = uinfo.get("gemini_key")
         if not key:
-            await query.answer("❌ Pehle setup complete karein! Key nahi mili.", show_alert=True)
+            await query.answer("❌ Pehle setup complete karein! Gemini API Key nahi mili.", show_alert=True)
             return
-        await query.answer("Testing AI Key...", show_alert=False)
+        await query.answer("Testing Gemini AI Key...", show_alert=False)
         try:
             ai_client = genai.Client(api_key=key)
-            res = generate_ai_response_safely(ai_client, "Hello, say Working!", "Be brief.")
+            res = generate_ai_response_safely(ai_client, "Hello, say Working!", "Be brief.", user_id)
             if res:
-                await query.answer("Key Working Perfectly!", show_alert=True)
+                await query.answer("Gemini Key Working Perfectly! 🟢", show_alert=True)
             else:
-                await query.answer("AI busy, but fallback system active hai!", show_alert=True)
+                await query.answer("❌ API Key test failed! Check logs.", show_alert=True)
         except Exception as e:
             await query.answer(f"Test Failed: {e}", show_alert=True)
 
     elif query.data == "view_my_logs":
         await query.answer()
         logs = user_logs.get(user_id, [])
-        logs_text = "\n".join(logs[-12:]) if logs else "Koi logs abhi tak record nahi hue hain."
+        logs_text = "\n".join(logs[-15:]) if logs else "🔴 Koi logs abhi tak record nahi hue hain."
         keyboard = [
-            [InlineKeyboardButton("Refresh Live Logs 🟥", callback_data="view_my_logs")],
-            [InlineKeyboardButton("Back to Panel 🟦", callback_data="main_menu")]
+            [InlineKeyboardButton("🔄 Refresh Live Logs", callback_data="view_my_logs")],
+            [InlineKeyboardButton("🔙 Back to Main Panel", callback_data="main_menu")]
         ]
         try:
             await query.edit_message_text(
@@ -484,8 +500,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         active_count = len(running_userbots)
         total_users = len(user_data)
         keyboard = [
-            [InlineKeyboardButton("Refresh Panel 🔴", callback_data="owner_panel")],
-            [InlineKeyboardButton("Back to Panel 🟦", callback_data="main_menu")]
+            [InlineKeyboardButton("🔄 Refresh Panel", callback_data="owner_panel")],
+            [InlineKeyboardButton("🔙 Back to Panel", callback_data="main_menu")]
         ]
         try:
             await query.edit_message_text(
@@ -545,7 +561,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data[user_id].pop("step", None)
         user_data[user_id]["is_active"] = True
         save_db()
-        add_user_log(user_id, "Setup Completed Successfully!")
+        add_user_log(user_id, "Setup Completed & API Key Saved Successfully!", "success")
 
         await update.message.reply_text(
             "🟩 **Setup Complete & Hosting Started!**\n\n"
@@ -558,7 +574,7 @@ async def startup_reconnect():
     await asyncio.sleep(1)
     for uid, uinfo in user_data.items():
         if uinfo.get("is_active", True) and uinfo.get("session"):
-            print(f"Auto-relaunching session for User: {uid}")
+            print(f"{GREEN}Auto-relaunching session for User: {uid}{RESET}")
             asyncio.create_task(run_userbot(
                 uid, uinfo["api_id"], uinfo["api_hash"], uinfo["session"], uinfo.get("gemini_key")
             ))
@@ -576,5 +592,5 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     loop.create_task(startup_reconnect())
     
-    print("Dual Engine AI Assistant Bot Started Successfully!")
+    print(f"{GREEN}Dual Engine AI Assistant Bot Started Successfully!{RESET}")
     app.run_polling()
