@@ -4,8 +4,6 @@ import asyncio
 import logging
 import random
 from datetime import datetime
-from threading import Thread
-from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from telethon import TelegramClient, events
@@ -15,17 +13,6 @@ from google.genai import types
 
 # Logging setup
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-
-# Flask Web Server to keep Heroku awake 24/7
-app_flask = Flask(__name__)
-
-@app_flask.route('/')
-def home():
-    return "VIP AI Userbot Hosting Bot is Alive & Running 24/7 with Ultimate Fail-Safe System! 🔥"
-
-def run_flask():
-    port = int(os.environ.get("PORT", 5000))
-    app_flask.run(host="0.0.0.0", port=port)
 
 DATA_FILE = "user_sessions.json"
 running_userbots = {}
@@ -50,7 +37,8 @@ def save_db():
                 "session": uinfo.get("session"),
                 "gemini_key": uinfo.get("gemini_key"),
                 "is_active": uinfo.get("is_active", True),
-                "ai_mode": uinfo.get("ai_mode", "HYBRID"),
+                "reply_mode": uinfo.get("reply_mode", "TAG_ONLY"), # TAG_ONLY ya ALL_MESSAGES
+                "ai_type": uinfo.get("ai_type", "GEMINI_AI"),     # GEMINI_AI ya NORMAL_MSG
                 "active_chats": list(uinfo.get("active_chats", set()))
             }
         with open(DATA_FILE, "w") as f:
@@ -68,7 +56,8 @@ for uid_str, uinfo in saved_db.items():
         "session": uinfo.get("session"),
         "gemini_key": uinfo.get("gemini_key"),
         "is_active": uinfo.get("is_active", True),
-        "ai_mode": uinfo.get("ai_mode", "HYBRID"),
+        "reply_mode": uinfo.get("reply_mode", "TAG_ONLY"),
+        "ai_type": uinfo.get("ai_type", "GEMINI_AI"),
         "active_chats": set(uinfo.get("active_chats", []))
     }
 
@@ -85,7 +74,7 @@ def add_user_log(user_id, message):
 FORCE_CHANNEL = os.getenv("FORCE_CHANNEL", "@YourChannelName")
 OWNER_ID = int(os.getenv("OWNER_ID", "0"))
 
-# EXTENSIVE & SUPER NATURAL HINGLISH SMART FALLBACK MESSAGES (30+ RESPONSES)
+# EXTENSIVE NATURAL HINGLISH SMART NORMAL MESSAGES
 SMART_FALLBACKS = [
     "Arey bilkul sahi baat kahi aapne! 🔥",
     "Haha true dost, main bhi wahi soch raha tha! 😎✨",
@@ -132,7 +121,7 @@ async def check_subscription(bot, user_id):
         print(f"Force Sub Check Error: {e}")
     return False
 
-# Multi-Model Fail-Safe AI Generator
+# Multi-Model Smart AI Generator
 def generate_ai_response_safely(ai_client, text, sys_prompt):
     models_to_try = ["gemini-3.8-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
     for model_name in models_to_try:
@@ -170,6 +159,11 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
             save_db()
             add_user_log(user_id, "Account Online & Connected to Telegram!")
 
+            me = await client.get_me()
+            my_id = me.id
+            my_username = f"@{me.username}" if me.username else ""
+            my_firstname = me.first_name if me.first_name else ""
+
             @client.on(events.NewMessage(pattern=r'\.aion', outgoing=True))
             async def turn_on(event):
                 if not user_data.get(user_id, {}).get("is_active", True):
@@ -177,9 +171,11 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                 chat_id = event.chat_id
                 user_data[user_id]["active_chats"].add(chat_id)
                 save_db()
-                add_user_log(user_id, f"AI Activated in Group: {chat_id}")
+                mode = user_data.get(user_id, {}).get("reply_mode", "TAG_ONLY")
+                ai_type = user_data.get(user_id, {}).get("ai_type", "GEMINI_AI")
+                add_user_log(user_id, f"Activated in Chat {chat_id} (Mode: {mode}, Type: {ai_type})")
                 try:
-                    await event.edit("🟩 **[AI ACTIVATED] Fail-Safe Auto-Reply is Live in THIS Group!**")
+                    await event.edit(f"🟩 **[ACTIVATED] Mode: {mode} | Reply Engine: {ai_type}**")
                 except:
                     pass
 
@@ -189,9 +185,9 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                 if chat_id in user_data[user_id]["active_chats"]:
                     user_data[user_id]["active_chats"].remove(chat_id)
                     save_db()
-                add_user_log(user_id, f"AI Deactivated in Group: {chat_id}")
+                add_user_log(user_id, f"Deactivated in Chat: {chat_id}")
                 try:
-                    await event.edit("ff **[AI STOPPED] Auto-Reply Turned OFF for THIS Group!**")
+                    await event.edit("ff **[STOPPED] Auto-Reply Turned OFF for THIS Group!**")
                 except:
                     pass
 
@@ -204,42 +200,70 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                     return
                 if not event.raw_text or event.raw_text.startswith(".aion") or event.raw_text.startswith(".aioff"):
                     return
+                
+                if event.out:
+                    return
+
                 if event.is_channel and not getattr(event.chat, 'megagroup', False) and not getattr(event.chat, 'gigagroup', False):
                     return
 
+                reply_mode = user_data.get(user_id, {}).get("reply_mode", "TAG_ONLY")
+                ai_type = user_data.get(user_id, {}).get("ai_type", "GEMINI_AI")
+
+                # IF MODE IS 'TAG_ONLY', CHECK FOR TAG / REPLY
+                if reply_mode == "TAG_ONLY":
+                    is_mentioned = False
+                    if event.is_reply:
+                        reply_msg = await event.get_reply_message()
+                        if reply_msg and reply_msg.sender_id == my_id:
+                            is_mentioned = True
+
+                    if not is_mentioned:
+                        msg_text = event.raw_text.lower()
+                        if my_username and my_username.lower() in msg_text:
+                            is_mentioned = True
+                        elif my_firstname and my_firstname.lower() in msg_text:
+                            is_mentioned = True
+                        elif event.mentioned:
+                            is_mentioned = True
+
+                    if not is_mentioned:
+                        return
+
                 reply_text = None
-                add_user_log(user_id, f"New Message in Chat {chat_id}: '{event.raw_text}'")
+                add_user_log(user_id, f"Processing Msg in Chat {chat_id}: '{event.raw_text}'")
 
                 try:
-                    sender = await event.get_sender()
-                    user_name = sender.first_name if sender and sender.first_name else "Dost"
-                    
-                    sys_prompt = (
-                        f"Aap ek real person ho jo Telegram par chat kar rahe ho. "
-                        f"Samne wala user '{user_name}' jo bhi message bhej raha hai, "
-                        f"uska ekdum natural, insaan jaisa, smart aur friendly Hinglish me jawab do. "
-                        f"Unka naam lekar ya pyaar se baat karo. Short aur cool replies do. Emojis use karo."
-                    )
+                    if ai_type == "GEMINI_AI":
+                        sender = await event.get_sender()
+                        user_name = sender.first_name if sender and sender.first_name else "Dost"
+                        
+                        sys_prompt = (
+                            f"Aap '{my_firstname}' ke AI Assistant ho. "
+                            f"Samne wala user '{user_name}' jo message bhej raha hai, "
+                            f"uska ekdum natural, cool, friendly Hinglish me assistant jaisa reply do. "
+                            f"Short aur smart reply do with emojis."
+                        )
 
-                    await asyncio.sleep(0.6)
+                        await asyncio.sleep(0.5)
 
-                    # Multi-Model AI Generation Attempt
-                    reply_text = generate_ai_response_safely(ai_client, event.raw_text, sys_prompt)
-                    
-                    if reply_text:
-                        add_user_log(user_id, f"Gemini AI Generated Reply Successfully")
+                        # Gemini AI Attempt
+                        reply_text = generate_ai_response_safely(ai_client, event.raw_text, sys_prompt)
+                        if not reply_text:
+                            reply_text = random.choice(SMART_FALLBACKS)
                     else:
-                        add_user_log(user_id, f"AI Limit Reached/Busy -> Switching to Smart Fallback!")
+                        # Normal Mode -> Pure Pre-saved Random Response
+                        await asyncio.sleep(0.5)
                         reply_text = random.choice(SMART_FALLBACKS)
 
                 except Exception as api_err:
-                    add_user_log(user_id, f"Exception Handled -> Using Smart Fallback: {api_err}")
+                    add_user_log(user_id, f"Exception Handled -> Using Normal Msg: {api_err}")
                     reply_text = random.choice(SMART_FALLBACKS)
 
                 if reply_text:
                     try:
                         await event.reply(reply_text)
-                        add_user_log(user_id, f"Auto-Reply Sent Successfully!")
+                        add_user_log(user_id, f"Reply Sent Successfully!")
                     except Exception as send_err:
                         add_user_log(user_id, f"Send Error: {send_err}")
                         await asyncio.sleep(2)
@@ -269,28 +293,36 @@ async def stop_userbot(user_id):
 def get_user_panel_markup(user_id):
     is_active = user_data.get(user_id, {}).get("is_active", False)
     has_session = "session" in user_data.get(user_id, {})
-    ai_mode = user_data.get(user_id, {}).get("ai_mode", "HYBRID")
+    reply_mode = user_data.get(user_id, {}).get("reply_mode", "TAG_ONLY")
+    ai_type = user_data.get(user_id, {}).get("ai_type", "GEMINI_AI")
     
     keyboard = []
     
     if is_active and has_session:
-        keyboard.append([InlineKeyboardButton("🟥 DEACTIVATE HOSTING (STOP) 🟥", callback_data="deactivate_host")])
+        keyboard.append([InlineKeyboardButton("Stop Hosting 🟥", callback_data="deactivate_host")])
         keyboard.append([InlineKeyboardButton("🟩 STATUS: HOSTING ACTIVE 🟩", callback_data="status_info")])
     else:
-        keyboard.append([InlineKeyboardButton("🟩 ACTIVATE HOSTING (START) 🟩", callback_data="activate_host")])
+        keyboard.append([InlineKeyboardButton("Start Hosting 🟩", callback_data="activate_host")])
         keyboard.append([InlineKeyboardButton("🟥 STATUS: DEACTIVATED 🟥", callback_data="status_info")])
+    
+    # Buttons for Toggle Modes
+    mode_btn_text = "🏷️ FILTER: TAG ONLY" if reply_mode == "TAG_ONLY" else "💬 FILTER: ALL MESSAGES"
+    ai_btn_text = "🤖 ENGINE: GEMINI AI" if ai_type == "GEMINI_AI" else "💬 ENGINE: NORMAL MSG"
+    
+    keyboard.append([
+        InlineKeyboardButton(mode_btn_text, callback_data="toggle_reply_mode"),
+        InlineKeyboardButton(ai_btn_text, callback_data="toggle_ai_type")
+    ])
     
     keyboard.append([
         InlineKeyboardButton("🟦 LIVE LOGS 🟦", callback_data="view_my_logs"),
-        InlineKeyboardButton(f"🟨 MODE: {ai_mode} 🟨", callback_data="toggle_mode")
-    ])
-    keyboard.append([
-        InlineKeyboardButton("🟩 TEST AI KEY 🟩", callback_data="test_ai"),
-        InlineKeyboardButton("🟧 RE-ENTER SETUP DATA 🟧", callback_data="start_setup")
+        InlineKeyboardButton("🟩 TEST AI KEY 🟩", callback_data="test_ai")
     ])
 
+    keyboard.append([InlineKeyboardButton("🟧 RE-ENTER SETUP DATA 🟧", callback_data="start_setup")])
+
     if OWNER_ID and user_id == OWNER_ID:
-        keyboard.append([InlineKeyboardButton("🟥 OWNER CONTROL PANEL 🚨 🟥", callback_data="owner_panel")])
+        keyboard.append([InlineKeyboardButton("👑 OWNER CONTROL PANEL 👑", callback_data="owner_panel")])
         
     return InlineKeyboardMarkup(keyboard)
 
@@ -310,8 +342,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     text = (
-        "👋 **Welcome to VIP AI Userbot Hosting Panel!**\n\n"
-        "Fail-Safe Smart System active hai. Niche diye gaye buttons se control karein:"
+        "👋 **Welcome to VIP AI & Normal Userbot Control Panel!**\n\n"
+        "Control Panel me buttons dabakar choose karein:\n"
+        "• **FILTER**: Tag Only ya All Messages\n"
+        "• **ENGINE**: Gemini AI ya Normal Messages"
     )
     await update.message.reply_text(text, reply_markup=get_user_panel_markup(user_id))
 
@@ -332,7 +366,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "deactivate_host":
         await stop_userbot(user_id)
         await query.edit_message_text(
-            "🟥 **HOSTING DEACTIVATED!**\n\nUserbot ab off hai.",
+            "libre **HOSTING DEACTIVATED!**\n\nUserbot ab off hai.",
             reply_markup=get_user_panel_markup(user_id)
         )
 
@@ -353,14 +387,24 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await query.answer("❌ Pehle 'RE-ENTER SETUP DATA' par click karke details submit karein!", show_alert=True)
 
-    elif query.data == "toggle_mode":
-        current_mode = user_data.get(user_id, {}).get("ai_mode", "HYBRID")
-        new_mode = "AI_ONLY" if current_mode == "HYBRID" else "HYBRID"
+    elif query.data == "toggle_reply_mode":
+        current_mode = user_data.get(user_id, {}).get("reply_mode", "TAG_ONLY")
+        new_mode = "ALL_MESSAGES" if current_mode == "TAG_ONLY" else "TAG_ONLY"
         if user_id not in user_data:
             user_data[user_id] = {}
-        user_data[user_id]["ai_mode"] = new_mode
+        user_data[user_id]["reply_mode"] = new_mode
         save_db()
-        await query.answer(f"Mode Changed to: {new_mode}", show_alert=True)
+        await query.answer(f"Filter Switched to: {new_mode}", show_alert=True)
+        await query.edit_message_reply_markup(reply_markup=get_user_panel_markup(user_id))
+
+    elif query.data == "toggle_ai_type":
+        current_type = user_data.get(user_id, {}).get("ai_type", "GEMINI_AI")
+        new_type = "NORMAL_MSG" if current_type == "GEMINI_AI" else "GEMINI_AI"
+        if user_id not in user_data:
+            user_data[user_id] = {}
+        user_data[user_id]["ai_type"] = new_type
+        save_db()
+        await query.answer(f"Engine Switched to: {new_type}", show_alert=True)
         await query.edit_message_reply_markup(reply_markup=get_user_panel_markup(user_id))
 
     elif query.data == "test_ai":
@@ -384,8 +428,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logs = user_logs.get(user_id, [])
         logs_text = "\n".join(logs[-12:]) if logs else "Koi logs abhi tak record nahi hue hain."
         keyboard = [
-            [InlineKeyboardButton("🟥 REFRESH LIVE LOGS 🟥", callback_data="view_my_logs")],
-            [InlineKeyboardButton("🟦 BACK TO PANEL 🟦", callback_data="main_menu")]
+            [InlineKeyboardButton("Refresh Live Logs 🟥", callback_data="view_my_logs")],
+            [InlineKeyboardButton("Back to Panel 🟦", callback_data="main_menu")]
         ]
         await query.edit_message_text(
             f"📋 **YOUR REAL-TIME USERBOT LOGS:**\n\n```text\n{logs_text}\n```",
@@ -400,8 +444,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         active_count = len(running_userbots)
         total_users = len(user_data)
         keyboard = [
-            [InlineKeyboardButton("🟥 REFRESH PANEL 🔴", callback_data="owner_panel")],
-            [InlineKeyboardButton("🟦 BACK TO MAIN MENU 🟦", callback_data="main_menu")]
+            [InlineKeyboardButton("Refresh Panel 🔴", callback_data="owner_panel")],
+            [InlineKeyboardButton("Back to Panel 🟦", callback_data="main_menu")]
         ]
         await query.edit_message_text(
             f"👑 **OWNER ADMIN PANEL** 👑\n\n• Active Bots: `{active_count}`\n• Total Accounts: `{total_users}`",
@@ -453,7 +497,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             "🟩 **Setup Complete & Hosting Started!**\n\n"
-            "Account live ho chuka hai! Group me **`.aion`** bhej kar AI active karein, aur **`.aioff`** se band karein.",
+            "Account live ho chuka hai! Group me **`.aion`** bhej kar active karein, aur **`.aioff`** se band karein.",
             reply_markup=get_user_panel_markup(user_id)
         )
         asyncio.create_task(run_userbot(user_id, api_id, api_hash, session, gemini_key))
@@ -472,10 +516,6 @@ if __name__ == "__main__":
     if not BOT_TOKEN:
         raise ValueError("BOT_TOKEN missing!")
     
-    flask_thread = Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-    
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_callback))
@@ -484,5 +524,5 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     loop.create_task(startup_reconnect())
     
-    print("Manager Bot is running 24/7 with Extended Natural Smart Fallbacks...")
+    print("Dual Engine AI Assistant Bot Started Successfully!")
     app.run_polling()
