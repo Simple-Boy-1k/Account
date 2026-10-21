@@ -1,10 +1,28 @@
 {
   "name": "Telegram AI Host Bot",
-  "description": "Host custom userbots with Gemini AI, Force Sub & Colorful Control Panel.",
+  "description": "Host custom userbots with Gemini AI, Force Sub, Owner ID & Colorful Control Panel.",
   "stack": "container",
   "env": {
-    "BOT_TOKEN": { "description": "Telegram Bot Token", "value": "", "required": true },
-    "FORCE_CHANNEL": { "description": "Channel Username for Force Sub", "value": "@YourChannelName", "required": false }
+    "BOT_TOKEN": {
+      "description": "Your Telegram Bot Token from @BotFather",
+      "value": "",
+      "required": true
+    },
+    "FORCE_CHANNEL": {
+      "description": "Your Telegram Channel Username for Force Subscribe (e.g. @YourChannel)",
+      "value": "@YourChannelName",
+      "required": false
+    },
+    "OWNER_ID": {
+      "description": "Your Telegram Numeric User ID (e.g. 123456789)",
+      "value": "",
+      "required": true
+    }
   },
-  "formation": { "worker": { "quantity": 1, "size": "eco" } }
+  "formation": {
+    "worker": {
+      "quantity": 1,
+      "size": "eco"
+    }
+  }
 }
