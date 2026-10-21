@@ -37,8 +37,8 @@ def save_db():
                 "session": uinfo.get("session"),
                 "gemini_key": uinfo.get("gemini_key"),
                 "is_active": uinfo.get("is_active", True),
-                "reply_mode": uinfo.get("reply_mode", "TAG_ONLY"), # TAG_ONLY ya ALL_MESSAGES
-                "ai_type": uinfo.get("ai_type", "GEMINI_AI"),     # GEMINI_AI ya NORMAL_MSG
+                "reply_mode": uinfo.get("reply_mode", "TAG_ONLY"),
+                "ai_type": uinfo.get("ai_type", "GEMINI_AI"),
                 "active_chats": list(uinfo.get("active_chats", set()))
             }
         with open(DATA_FILE, "w") as f:
@@ -74,7 +74,6 @@ def add_user_log(user_id, message):
 FORCE_CHANNEL = os.getenv("FORCE_CHANNEL", "@YourChannelName")
 OWNER_ID = int(os.getenv("OWNER_ID", "0"))
 
-# EXTENSIVE NATURAL HINGLISH SMART NORMAL MESSAGES
 SMART_FALLBACKS = [
     "Arey bilkul sahi baat kahi aapne! 🔥",
     "Haha true dost, main bhi wahi soch raha tha! 😎✨",
@@ -121,7 +120,6 @@ async def check_subscription(bot, user_id):
         print(f"Force Sub Check Error: {e}")
     return False
 
-# Multi-Model Smart AI Generator
 def generate_ai_response_safely(ai_client, text, sys_prompt):
     models_to_try = ["gemini-3.8-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
     for model_name in models_to_try:
@@ -175,7 +173,7 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                 ai_type = user_data.get(user_id, {}).get("ai_type", "GEMINI_AI")
                 add_user_log(user_id, f"Activated in Chat {chat_id} (Mode: {mode}, Type: {ai_type})")
                 try:
-                    await event.edit(f"🟩 **[ACTIVATED] Mode: {mode} | Reply Engine: {ai_type}**")
+                    await event.edit(f"🟩 **[ACTIVATED] Mode: {mode} | Engine: {ai_type}**")
                 except:
                     pass
 
@@ -187,7 +185,7 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                     save_db()
                 add_user_log(user_id, f"Deactivated in Chat: {chat_id}")
                 try:
-                    await event.edit("ff **[STOPPED] Auto-Reply Turned OFF for THIS Group!**")
+                    await event.edit("🟥 **[STOPPED] Auto-Reply Turned OFF for THIS Group!**")
                 except:
                     pass
 
@@ -210,7 +208,6 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                 reply_mode = user_data.get(user_id, {}).get("reply_mode", "TAG_ONLY")
                 ai_type = user_data.get(user_id, {}).get("ai_type", "GEMINI_AI")
 
-                # IF MODE IS 'TAG_ONLY', CHECK FOR TAG / REPLY
                 if reply_mode == "TAG_ONLY":
                     is_mentioned = False
                     if event.is_reply:
@@ -246,13 +243,10 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                         )
 
                         await asyncio.sleep(0.5)
-
-                        # Gemini AI Attempt
                         reply_text = generate_ai_response_safely(ai_client, event.raw_text, sys_prompt)
                         if not reply_text:
                             reply_text = random.choice(SMART_FALLBACKS)
                     else:
-                        # Normal Mode -> Pure Pre-saved Random Response
                         await asyncio.sleep(0.5)
                         reply_text = random.choice(SMART_FALLBACKS)
 
@@ -305,7 +299,6 @@ def get_user_panel_markup(user_id):
         keyboard.append([InlineKeyboardButton("Start Hosting 🟩", callback_data="activate_host")])
         keyboard.append([InlineKeyboardButton("🟥 STATUS: DEACTIVATED 🟥", callback_data="status_info")])
     
-    # Buttons for Toggle Modes
     mode_btn_text = "🏷️ FILTER: TAG ONLY" if reply_mode == "TAG_ONLY" else "💬 FILTER: ALL MESSAGES"
     ai_btn_text = "🤖 ENGINE: GEMINI AI" if ai_type == "GEMINI_AI" else "💬 ENGINE: NORMAL MSG"
     
@@ -342,10 +335,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     text = (
-        "👋 **Welcome to VIP AI & Normal Userbot Control Panel!**\n\n"
-        "Control Panel me buttons dabakar choose karein:\n"
-        "• **FILTER**: Tag Only ya All Messages\n"
-        "• **ENGINE**: Gemini AI ya Normal Messages"
+        "👋 **Welcome to VIP AI Userbot Control Panel!**\n\n"
+        "Control Panel se manage karein:"
     )
     await update.message.reply_text(text, reply_markup=get_user_panel_markup(user_id))
 
@@ -365,25 +356,30 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "deactivate_host":
         await stop_userbot(user_id)
-        await query.edit_message_text(
-            "libre **HOSTING DEACTIVATED!**\n\nUserbot ab off hai.",
-            reply_markup=get_user_panel_markup(user_id)
-        )
+        try:
+            await query.edit_message_text(
+                "🟥 **HOSTING DEACTIVATED!**\n\nUserbot ab off hai.",
+                reply_markup=get_user_panel_markup(user_id)
+            )
+        except:
+            pass
 
     elif query.data == "activate_host":
         uinfo = user_data.get(user_id, {})
         if "session" in uinfo and uinfo["session"]:
             user_data[user_id]["is_active"] = True
             save_db()
-            await query.edit_message_text("🟦 **ACTIVATING HOSTING...** Please wait...")
             asyncio.create_task(run_userbot(
                 user_id, uinfo["api_id"], uinfo["api_hash"], uinfo["session"], uinfo["gemini_key"]
             ))
-            await asyncio.sleep(1)
-            await query.edit_message_text(
-                "🟩 **HOSTING ACTIVATED SUCCESSFULLY!**",
-                reply_markup=get_user_panel_markup(user_id)
-            )
+            await asyncio.sleep(0.5)
+            try:
+                await query.edit_message_text(
+                    "🟩 **HOSTING ACTIVATED SUCCESSFULLY!**",
+                    reply_markup=get_user_panel_markup(user_id)
+                )
+            except:
+                pass
         else:
             await query.answer("❌ Pehle 'RE-ENTER SETUP DATA' par click karke details submit karein!", show_alert=True)
 
@@ -395,7 +391,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data[user_id]["reply_mode"] = new_mode
         save_db()
         await query.answer(f"Filter Switched to: {new_mode}", show_alert=True)
-        await query.edit_message_reply_markup(reply_markup=get_user_panel_markup(user_id))
+        try:
+            await query.edit_message_reply_markup(reply_markup=get_user_panel_markup(user_id))
+        except:
+            pass
 
     elif query.data == "toggle_ai_type":
         current_type = user_data.get(user_id, {}).get("ai_type", "GEMINI_AI")
@@ -405,7 +404,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data[user_id]["ai_type"] = new_type
         save_db()
         await query.answer(f"Engine Switched to: {new_type}", show_alert=True)
-        await query.edit_message_reply_markup(reply_markup=get_user_panel_markup(user_id))
+        try:
+            await query.edit_message_reply_markup(reply_markup=get_user_panel_markup(user_id))
+        except:
+            pass
 
     elif query.data == "test_ai":
         uinfo = user_data.get(user_id, {})
@@ -431,11 +433,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("Refresh Live Logs 🟥", callback_data="view_my_logs")],
             [InlineKeyboardButton("Back to Panel 🟦", callback_data="main_menu")]
         ]
-        await query.edit_message_text(
-            f"📋 **YOUR REAL-TIME USERBOT LOGS:**\n\n```text\n{logs_text}\n```",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        try:
+            await query.edit_message_text(
+                f"📋 **YOUR REAL-TIME USERBOT LOGS:**\n\n```text\n{logs_text}\n```",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        except:
+            pass
 
     elif query.data == "owner_panel":
         if user_id != OWNER_ID:
@@ -447,19 +452,28 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("Refresh Panel 🔴", callback_data="owner_panel")],
             [InlineKeyboardButton("Back to Panel 🟦", callback_data="main_menu")]
         ]
-        await query.edit_message_text(
-            f"👑 **OWNER ADMIN PANEL** 👑\n\n• Active Bots: `{active_count}`\n• Total Accounts: `{total_users}`",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        try:
+            await query.edit_message_text(
+                f"👑 **OWNER ADMIN PANEL** 👑\n\n• Active Bots: `{active_count}`\n• Total Accounts: `{total_users}`",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        except:
+            pass
 
     elif query.data == "main_menu":
-        await query.edit_message_text("👋 **VIP Hosting Dashboard:**", reply_markup=get_user_panel_markup(user_id))
+        try:
+            await query.edit_message_text("👋 **VIP Hosting Dashboard:**", reply_markup=get_user_panel_markup(user_id))
+        except:
+            pass
 
     elif query.data == "start_setup":
         if user_id not in user_data:
             user_data[user_id] = {}
         user_data[user_id]["step"] = "API_ID"
-        await query.edit_message_text("📝 **Step 1/4: API ID**\n\nApni Telegram **API ID** bhejo:")
+        try:
+            await query.edit_message_text("📝 **Step 1/4: API ID**\n\nApni Telegram **API ID** bhejo:")
+        except:
+            pass
 
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
