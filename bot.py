@@ -13,10 +13,11 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 # Global storage
 running_userbots = {}
-user_data = {}  # {user_id: {"api_id": ..., "api_hash": ..., "session": ..., "gemini_key": ..., "step": ..., "ai_enabled": False}}
+user_data = {}
 
-# Force Subscribe Channel Username
+# Force Subscribe & Owner ID from Environment
 FORCE_CHANNEL = os.getenv("FORCE_CHANNEL", "@YourChannelName")
+OWNER_ID = int(os.getenv("OWNER_ID", "0"))  # Yahan tera Owner Telegram ID aayega
 
 async def check_subscription(bot, user_id):
     if not FORCE_CHANNEL or FORCE_CHANNEL == "@YourChannelName":
@@ -40,7 +41,7 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
         
         if user_id not in user_data:
             user_data[user_id] = {}
-        user_data[user_id]["ai_enabled"] = False
+        user_data[user_id]["ai_enabled"] = True
 
         @client.on(events.NewMessage(pattern=r'\.aion', outgoing=True))
         async def turn_on(event):
@@ -91,10 +92,11 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
     except Exception as e:
         print(f"Failed to start userbot for {user_id}: {e}")
 
-# /start command with Force Subscribe
+# /start command with Force Subscribe & Owner Check
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
+    # Force Subscribe check
     is_subbed = await check_subscription(context.bot, user_id)
     if not is_subbed:
         keyboard = [
@@ -104,19 +106,30 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(
             "⚠️ **Access Denied!**\n\n"
-            f"Phle hamare channel {FORCE_CHANNEL} ko join karo, phir 'Joined / Check Again' par click karo!",
+            f"Pehle hamare channel {FORCE_CHANNEL} ko join karo, phir niche 'Joined / Check Again' par click karo!",
             reply_markup=reply_markup
         )
         return
 
-    user_data[user_id] = {"step": "API_ID"}
-    await update.message.reply_text(
-        "👋 **Welcome to AI Userbot Host Bot!**\n\n"
-        "Channel join karne ke liye shukriya ❤️\n"
-        "Apne Telegram account ko host karne ke liye sabse pehle apni **API ID** bhejo:"
-    )
+    # Owner Special Panel vs Normal User Setup Panel
+    if OWNER_ID and user_id == OWNER_ID:
+        keyboard = [
+            [InlineKeyboardButton("🚀 Host / Setup Account", callback_data="start_setup")],
+            [InlineKeyboardButton("👑 Owner Control Panel", callback_data="owner_panel")],
+            [InlineKeyboardButton("🔵 Bot Status: ONLINE 🟢", callback_data="status")]
+        ]
+        text = "👑 **Welcome Boss / Owner!**\n\nTumhara Special Owner Panel ready hai. Apna account host karne ke liye niche click karo:"
+    else:
+        keyboard = [
+            [InlineKeyboardButton("🚀 Host / Setup Account", callback_data="start_setup")],
+            [InlineKeyboardButton("🔵 Bot Status: ONLINE 🟢", callback_data="status")]
+        ]
+        text = "👋 **Welcome to AI Userbot Host Bot!**\n\nChannel verification successful! ✅\nNeeche diye gaye button par click karke details enter karna shuru karo:"
 
-# Callback query for Force Sub check and Control Panel buttons
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(text, reply_markup=reply_markup)
+
+# Callback query handler
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -125,13 +138,63 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "check_sub":
         is_subbed = await check_subscription(context.bot, user_id)
         if is_subbed:
-            user_data[user_id] = {"step": "API_ID"}
-            await query.edit_message_text(
-                "✅ **Channel Verified Successfully!**\n\n"
-                "Ab apne Telegram account ko host karne ke liye apni **API ID** bhejo:"
-            )
+            if OWNER_ID and user_id == OWNER_ID:
+                keyboard = [
+                    [InlineKeyboardButton("🚀 Host / Setup Account", callback_data="start_setup")],
+                    [InlineKeyboardButton("👑 Owner Control Panel", callback_data="owner_panel")],
+                    [InlineKeyboardButton("🔵 Bot Status: ONLINE 🟢", callback_data="status")]
+                ]
+                text = "✅ **Verified Boss!** Owner Control Panel ready hai:"
+            else:
+                keyboard = [
+                    [InlineKeyboardButton("🚀 Host / Setup Account", callback_data="start_setup")],
+                    [InlineKeyboardButton("🔵 Bot Status: ONLINE 🟢", callback_data="status")]
+                ]
+                text = "✅ **Channel Verified Successfully!** Ab account host karne ke liye niche button par click karo:"
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(text, reply_markup=reply_markup)
         else:
             await query.answer("❌ Tumne abhi tak channel join nahi kiya hai!", show_alert=True)
+
+    elif query.data == "owner_panel":
+        if user_id != OWNER_ID:
+            await query.answer("⚠️ Yeh sirf Owner ke liye hai!", show_alert=True)
+            return
+        
+        active_count = len(running_userbots)
+        keyboard = [
+            [InlineKeyboardButton(f"📊 Active Userbots: {active_count}", callback_data="status")],
+            [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="main_menu")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(
+            f"👑 **Owner Statistics & Control**\n\n"
+            f"• Total Active Hosted Bots: `{active_count}`\n"
+            f"• Bot Status: `Running Smoothly 🚀`",
+            reply_markup=reply_markup
+        )
+
+    elif query.data == "main_menu":
+        if OWNER_ID and user_id == OWNER_ID:
+            keyboard = [
+                [InlineKeyboardButton("🚀 Host / Setup Account", callback_data="start_setup")],
+                [InlineKeyboardButton("👑 Owner Control Panel", callback_data="owner_panel")],
+                [InlineKeyboardButton("🔵 Bot Status: ONLINE 🟢", callback_data="status")]
+            ]
+        else:
+            keyboard = [
+                [InlineKeyboardButton("🚀 Host / Setup Account", callback_data="start_setup")],
+                [InlineKeyboardButton("🔵 Bot Status: ONLINE 🟢", callback_data="status")]
+            ]
+        await query.edit_message_text("👋 **Main Menu:**", reply_markup=InlineKeyboardMarkup(keyboard))
+
+    elif query.data == "start_setup":
+        user_data[user_id] = {"step": "API_ID"}
+        await query.edit_message_text(
+            "📝 **Step 1/4: API ID**\n\n"
+            "Apni Telegram **API ID** bhejo (Numbers me hoti hai, jaise `12345678`):"
+        )
 
     elif query.data == "ai_on":
         if user_id in user_data:
@@ -150,8 +213,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
 def get_control_panel_markup(is_enabled):
-    # Telegram inline buttons me colors emojis aur clear action ke sath manage hote hain:
-    # 🟢 Green vibe (Turn On) | 🔴 Red danger vibe (Turn Off) | 🔵 Blue vibe (Status/Control)
     if is_enabled:
         keyboard = [
             [InlineKeyboardButton("🔴 Turn OFF AI (Stop)", callback_data="ai_off")],
@@ -164,7 +225,7 @@ def get_control_panel_markup(is_enabled):
         ]
     return InlineKeyboardMarkup(keyboard)
 
-# Message handler for step-by-step setup
+# Message handler for step-by-step credentials
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in user_data or "step" not in user_data[user_id]:
@@ -177,17 +238,17 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if step == "API_ID":
         user_data[user_id]["api_id"] = text
         user_data[user_id]["step"] = "API_HASH"
-        await update.message.reply_text("✅ API ID save ho gayi!\n\nAb apni Telegram **API HASH** bhejo:")
+        await update.message.reply_text("✅ **API ID Saved!**\n\n📝 **Step 2/4: API HASH**\n\nAb apni Telegram **API HASH** bhejo:")
 
     elif step == "API_HASH":
         user_data[user_id]["api_hash"] = text
         user_data[user_id]["step"] = "SESSION"
-        await update.message.reply_text("✅ API Hash save ho gayi!\n\nAb apna Telethon **SESSION STRING** bhejo:")
+        await update.message.reply_text("✅ **API Hash Saved!**\n\n📝 **Step 3/4: SESSION STRING**\n\nAb apna Telethon **SESSION STRING** bhejo:")
 
     elif step == "SESSION":
         user_data[user_id]["session"] = text
         user_data[user_id]["step"] = "GEMINI_KEY"
-        await update.message.reply_text("✅ Session String save ho gayi!\n\nAb apni **GEMINI API KEY** bhejo:")
+        await update.message.reply_text("✅ **Session String Saved!**\n\n📝 **Step 4/4: GEMINI API KEY**\n\nAkhir me apni **GEMINI API KEY** bhejo:")
 
     elif step == "GEMINI_KEY":
         api_id = user_data[user_id]["api_id"]
@@ -218,5 +279,5 @@ if __name__ == "__main__":
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), message_handler))
     
-    print("Manager Bot with Colorful Control Panel is running...")
+    print("Manager Bot with Owner Panel & Verification is running...")
     app.run_polling()
