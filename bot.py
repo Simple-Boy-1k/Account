@@ -8,8 +8,9 @@ from config import Config
 # Gemini API Configure karna
 genai.configure(api_key=Config.GEMINI_API_KEY)
 
+# Model name ko gemini-pro kar diya hai taaki 404 error na aaye
 model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
+    model_name="gemini-pro",
     system_instruction=Config.SYSTEM_PROMPT
 )
 
@@ -34,14 +35,12 @@ async def turn_off_ai(event):
     AI_ENABLED = False
     await event.edit("❌ **Gemini AI Auto-Reply Deactivated!**")
 
-# Yeh filter PM aur har tarah ke Groups/Supergroups ko cover karega
 @client.on(events.NewMessage(incoming=True))
 async def auto_reply(event):
     global AI_ENABLED
     if not AI_ENABLED or not event.raw_text:
         return
 
-    # Agar channel hua (broadcast wala) toh ignore karega, groups aur PM par reply karega
     if event.is_channel:
         chat = await event.get_chat()
         if not getattr(chat, 'megagroup', False) and not getattr(chat, 'gigagroup', False):
