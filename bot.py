@@ -8,9 +8,9 @@ from config import Config
 # Gemini API Configure karna
 genai.configure(api_key=Config.GEMINI_API_KEY)
 
-# Model name ko gemini-pro kar diya hai taaki 404 error na aaye
+# Latest aur sabse fast model
 model = genai.GenerativeModel(
-    model_name="gemini-pro",
+    model_name="gemini-1.5-flash",
     system_instruction=Config.SYSTEM_PROMPT
 )
 
@@ -27,7 +27,7 @@ AI_ENABLED = False
 async def turn_on_ai(event):
     global AI_ENABLED
     AI_ENABLED = True
-    await event.edit("✅ **Gemini AI Auto-Reply Activated (Groups + Supergroups + PM)!**")
+    await event.edit("✅ **Gemini AI Auto-Reply Activated!**")
 
 @client.on(events.NewMessage(pattern=r'\.aioff', outgoing=True))
 async def turn_off_ai(event):
