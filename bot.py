@@ -6,7 +6,7 @@ from google.genai import types
 
 from config import Config
 
-# Naye Google GenAI SDK Client Initialization
+# Google GenAI SDK Client Setup
 ai_client = genai.Client(api_key=Config.GEMINI_API_KEY)
 
 # Telethon Client Setup
@@ -22,7 +22,7 @@ AI_ENABLED = False
 async def turn_on_ai(event):
     global AI_ENABLED
     AI_ENABLED = True
-    await event.edit("✅ **Gemini AI Auto-Reply Activated (New SDK + Name + Emojis)!**")
+    await event.edit("✅ **Gemini AI Auto-Reply Activated (Name + Emojis)!**")
 
 @client.on(events.NewMessage(pattern=r'\.aioff', outgoing=True))
 async def turn_off_ai(event):
@@ -36,18 +36,18 @@ async def auto_reply(event):
     if not AI_ENABLED or not event.raw_text:
         return
 
-    # Turn On / Turn Off command messages ko ignore karna
+    # Commands ko ignore karna
     if event.raw_text.startswith(".aion") or event.raw_text.startswith(".aioff"):
         return
 
-    # Channels ko skip karke Groups, Supergroups aur PMs me reply karna
+    # Channels ko ignore karke Groups aur PM me chalna
     if event.is_channel:
         chat = await event.get_chat()
         if not getattr(chat, 'megagroup', False) and not getattr(chat, 'gigagroup', False):
             return
 
     try:
-        # Sender Details for Personalized Reply
+        # Sender Name extraction
         sender = await event.get_sender()
         user_name = sender.first_name if sender and sender.first_name else "Dost"
 
@@ -59,9 +59,9 @@ async def auto_reply(event):
         )
 
         async with event.client.action(event.chat_id, 'typing'):
-            # Latest Google GenAI API Call
+            # Google exact model name fix: gemini-3.8-flash
             response = ai_client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.8-flash",
                 contents=event.raw_text,
                 config=types.GenerateContentConfig(
                     system_instruction=sys_instruction
