@@ -18,7 +18,7 @@ DATA_FILE = "user_sessions.json"
 running_userbots = {}
 user_logs = {}
 
-# Synchronous DB Load on launch taaki session kabhi loss na ho
+# Synchronous DB Load on launch
 def load_db():
     if os.path.exists(DATA_FILE):
         try:
@@ -94,7 +94,7 @@ async def check_subscription(bot, user_id):
         print(f"Force Sub Check Error: {e}")
     return False
 
-# Advanced Background Userbot Runner
+# Advanced Background Userbot Runner with gemini-3.8-flash
 async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
     try:
         if user_id in running_userbots:
@@ -115,7 +115,6 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
         save_db()
         add_user_log(user_id, "Account Online & Connected to Telegram!")
 
-        # Group me AI ON karne ka command (.aion)
         @client.on(events.NewMessage(pattern=r'\.aion', outgoing=True))
         async def turn_on(event):
             if not user_data.get(user_id, {}).get("is_active", True):
@@ -129,7 +128,6 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
             except:
                 pass
 
-        # Group me AI OFF karne ka command (.aioff)
         @client.on(events.NewMessage(pattern=r'\.aioff', outgoing=True))
         async def turn_off(event):
             chat_id = event.chat_id
@@ -170,14 +168,15 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
 
                 await asyncio.sleep(1.0)
 
+                # Updated to latest supported model gemini-3.8-flash
                 response = ai_client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-3.8-flash",
                     contents=event.raw_text,
                     config=types.GenerateContentConfig(system_instruction=sys_prompt)
                 )
                 if response and response.text:
                     reply_text = response.text
-                    add_user_log(user_id, f"Gemini AI Generated Real Context Reply")
+                    add_user_log(user_id, f"Gemini AI Generated Real Context Reply Successfully")
             except Exception as api_err:
                 add_user_log(user_id, f"Gemini Error: {api_err}")
                 mode = user_data.get(user_id, {}).get("ai_mode", "HYBRID")
@@ -211,7 +210,6 @@ async def stop_userbot(user_id):
         save_db()
     add_user_log(user_id, "Hosting Deactivated by User.")
 
-# Full VIP Dashboard Markup with Working Color Buttons
 def get_user_panel_markup(user_id):
     is_active = user_data.get(user_id, {}).get("is_active", False)
     has_session = "session" in user_data.get(user_id, {})
@@ -318,7 +316,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("Testing Gemini AI Key...", show_alert=False)
         try:
             ai_client = genai.Client(api_key=key)
-            res = ai_client.models.generate_content(model="gemini-2.5-flash", contents="Hello, say Working!")
+            res = ai_client.models.generate_content(model="gemini-3.8-flash", contents="Hello, say Working!")
             if res and res.text:
                 await query.answer("Key Working Perfectly!", show_alert=True)
         except Exception as e:
@@ -424,5 +422,5 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     loop.create_task(startup_reconnect())
     
-    print("Manager Bot is running A to Z with full functionality...")
+    print("Manager Bot is running with gemini-3.8-flash model...")
     app.run_polling()
