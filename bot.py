@@ -142,8 +142,8 @@ async def check_subscription(bot, user_id):
     return False
 
 def generate_ai_response_safely(ai_client, text, sys_prompt, user_id=None):
-    # Using real valid models to prevent silent failures
-    models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+    # Updated to active official models to prevent 404 NOT_FOUND errors
+    models_to_try = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-exp"]
     for model_name in models_to_try:
         try:
             response = ai_client.models.generate_content(
@@ -153,7 +153,7 @@ def generate_ai_response_safely(ai_client, text, sys_prompt, user_id=None):
             )
             if response and response.text:
                 if user_id:
-                    add_user_log(user_id, f"Gemini AI Success [{model_name}]", "success")
+                    add_user_log(user_id, f"Gemini AI Human Replica Success [{model_name}]", "success")
                 return response.text
         except Exception as err:
             err_msg = str(err)
@@ -183,7 +183,7 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
 
             await client.connect()
             if not await client.is_user_authorized():
-                add_user_log(user_id, "Session String Expired or Invalid! Re-enter setup.", "error")
+                add_user_log(user_id, "Session String Expired/Invalid! Re-enter setup.", "error")
                 user_data[user_id]["is_active"] = False
                 save_db()
                 break
@@ -220,7 +220,7 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                     save_db()
                 add_user_log(user_id, f"Deactivated in Chat: {chat_id}", "warn")
                 try:
-                    await event.edit("🟥 **[STOPPED] Auto-Reply Turned OFF for THIS Group!**")
+                    await event.edit("PR **[STOPPED] Auto-Reply Turned OFF for THIS Group!**")
                 except:
                     pass
 
@@ -270,11 +270,11 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                         sender = await event.get_sender()
                         user_name = sender.first_name if sender and sender.first_name else "Dost"
                         
+                        # Perfect Human-like Assistant Prompt
                         sys_prompt = (
-                            f"Aap '{my_firstname}' ke AI Assistant ho. "
-                            f"Samne wala user '{user_name}' jo message bhej raha hai, "
-                            f"uska ekdum natural, cool, friendly Hinglish me assistant jaisa reply do. "
-                            f"Short aur smart reply do with emojis."
+                            f"Aap real person '{my_firstname}' ho. Telegram group/chat me '{user_name}' se baat kar rahe ho. "
+                            f"Ekdum natural, human jaisa, cool, smart aur friendly Hinglish me jawab do. "
+                            f"Short aur engaging reply do with emojis like a real online friend."
                         )
 
                         await asyncio.sleep(0.5)
@@ -284,7 +284,7 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                             reply_text = random.choice(SMART_FALLBACKS)
                     else:
                         if ai_type == "GEMINI_AI" and not ai_client:
-                            add_user_log(user_id, "Gemini API Key missing! Switched to Normal Message.", "error")
+                            add_user_log(user_id, "Gemini Key missing! Switched to Normal Message.", "error")
                         await asyncio.sleep(0.5)
                         reply_text = random.choice(SMART_FALLBACKS)
 
@@ -341,7 +341,6 @@ def get_user_panel_markup(user_id):
         keyboard.append([InlineKeyboardButton("🟢 Start Hosting Bot", callback_data="activate_host")])
         keyboard.append([InlineKeyboardButton("🔴 Status: Deactivated", callback_data="status_info")])
     
-    # Clear, professional and understandable button names
     mode_btn_text = "🏷️ Filter: Tag Only (Mention)" if reply_mode == "TAG_ONLY" else "💬 Filter: All Messages"
     ai_btn_text = "🤖 Engine: Gemini AI Smart" if ai_type == "GEMINI_AI" else "💬 Engine: Normal Messages"
     
@@ -372,14 +371,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("🟩 Verify Subscription", callback_data="check_sub")]
         ]
         await update.message.reply_text(
-            "🟥 **ACCESS DENIED!**\n\nPehle official channel join karein!",
+            "PR **ACCESS DENIED!**\n\nPehle official channel join karein!",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
 
     text = (
         "👋 **Welcome to VIP AI Userbot Control Panel!**\n\n"
-        "Yahan se aap apne bot ki settings aur engines ko manage kar sakte hain:"
+        "Control Panel se manage karein:"
     )
     await update.message.reply_text(text, reply_markup=get_user_panel_markup(user_id))
 
