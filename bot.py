@@ -1,4 +1,5 @@
 import os
+import asyncio
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from google import genai
@@ -22,7 +23,7 @@ AI_ENABLED = False
 async def turn_on_ai(event):
     global AI_ENABLED
     AI_ENABLED = True
-    await event.edit("✅ **Gemini AI Auto-Reply Activated (Name + Emojis)!**")
+    await event.edit("✅ **Gemini AI Auto-Reply Activated successfully!**")
 
 @client.on(events.NewMessage(pattern=r'\.aioff', outgoing=True))
 async def turn_off_ai(event):
@@ -53,15 +54,18 @@ async def auto_reply(event):
 
         sys_instruction = (
             f"{Config.SYSTEM_PROMPT}\n"
-            f"Aap abhi '{user_name}' naam ke person se baat kar rahe ho. "
+            f"Aap abhi '{user_name}' naam ke person se baat kar رہے ho. "
             f"Aapko unka naam '{user_name}' lekar poori izzat, respect aur friendly tone me baat karni hai. "
             f"Ache ache aur natural emojis ka use karo aur Hinglish me short, energetic reply do."
         )
 
         async with event.client.action(event.chat_id, 'typing'):
-            # Google exact model name fix: gemini-3.8-flash
+            # Rate limit se bachne ke liye thoda gap
+            await asyncio.sleep(2)
+
+            # Stable model name use kiya hai
             response = ai_client.models.generate_content(
-                model="gemini-3.8-flash",
+                model="gemini-1.5-flash",
                 contents=event.raw_text,
                 config=types.GenerateContentConfig(
                     system_instruction=sys_instruction
@@ -72,7 +76,7 @@ async def auto_reply(event):
                 await event.reply(response.text)
 
     except Exception as e:
-        print(f"AI Error: {e}")
+        print(f"AI Error / Quota Notice: {e}")
 
 if __name__ == "__main__":
     print("Telethon AI Userbot is starting...")
