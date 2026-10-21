@@ -1,7 +1,6 @@
 import os
-import asyncio
-from pyrogram import Client, filters
-from pyrogram.types import Message
+from telethon import TelegramClient, events
+from telethon.sessions import StringSession
 import google.generativeai as genai
 
 from config import Config
@@ -14,41 +13,46 @@ model = genai.GenerativeModel(
     system_instruction=Config.SYSTEM_PROMPT
 )
 
-app = Client(
-    name="ai_userbot",
-    api_id=Config.API_ID,
-    api_hash=Config.API_HASH,
-    session_string=Config.SESSION_STRING
+# Telethon Client Setup (Kitne bhi channels ho, ye crash nahi karega)
+client = TelegramClient(
+    StringSession(Config.SESSION_STRING),
+    Config.API_ID,
+    Config.API_HASH
 )
 
 AI_ENABLED = False
 
-@app.on_message(filters.me & filters.command("aion", prefixes="."))
-async def turn_on_ai(client: Client, message: Message):
+# Command: .aion
+@client.on(events.NewMessage(pattern=r'\.aion', outgoing=True))
+async def turn_on_ai(event):
     global AI_ENABLED
     AI_ENABLED = True
-    await message.edit_text("✅ **Gemini AI Auto-Reply Activated!**")
+    await event.edit("✅ **Gemini AI Auto-Reply Activated (Telethon)!**")
 
-@app.on_message(filters.me & filters.command("aioff", prefixes="."))
-async def turn_off_ai(client: Client, message: Message):
+# Command: .aioff
+@client.on(events.NewMessage(pattern=r'\.aioff', outgoing=True))
+async def turn_off_ai(event):
     global AI_ENABLED
     AI_ENABLED = False
-    await message.edit_text("❌ **Gemini AI Auto-Reply Deactivated!**")
+    await event.edit("❌ **Gemini AI Auto-Reply Deactivated!**")
 
-# Strict filter: Sirf Private chats, non-bot, non-channel, non-group messages par chalega
-@app.on_message(filters.private & ~filters.me & ~filters.bot & ~filters.channel & ~filters.group)
-async def auto_reply(client: Client, message: Message):
+# Sirf Personal Chats (PM) ke liye auto-reply
+@client.on(events.NewMessage(incoming=True, func=lambda e: e.is_private))
+async def auto_reply(event):
     global AI_ENABLED
-    if not AI_ENABLED or not message.text:
+    if not AI_ENABLED or not event.raw_text:
         return
 
     try:
-        await client.send_chat_action(message.chat.id, "typing")
-        response = model.generate_content(message.text)
-        await message.reply_text(response.text)
+        # Typing status dikhana
+        async with event.client.action(event.chat_id, 'typing'):
+            response = model.generate_content(event.raw_text)
+            if response and response.text:
+                await event.reply(response.text)
     except Exception as e:
-        print(f"Gemini API / Peer Error: {e}")
+        print(f"AI Error: {e}")
 
 if __name__ == "__main__":
-    print("Gemini AI Userbot is starting...")
-    app.run()
+    print("Telethon AI Userbot is starting...")
+    client.start()
+    client.run_until_disconnected()
