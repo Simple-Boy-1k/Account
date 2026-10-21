@@ -1,6 +1,8 @@
 import os
 import asyncio
 import logging
+import random
+from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from telethon import TelegramClient, events
@@ -11,13 +13,39 @@ from google.genai import types
 # Logging setup
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# Global storage
 running_userbots = {}
 user_data = {}
+recent_logs = []
 
-# Force Subscribe & Owner ID from Environment
+def add_log(message):
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    log_entry = f"[{timestamp}] {message}"
+    recent_logs.append(log_entry)
+    if len(recent_logs) > 20:
+        recent_logs.pop(0)
+    print(log_entry)
+
 FORCE_CHANNEL = os.getenv("FORCE_CHANNEL", "@YourChannelName")
-OWNER_ID = int(os.getenv("OWNER_ID", "0"))  # Yahan tera Owner Telegram ID aayega
+OWNER_ID = int(os.getenv("OWNER_ID", "0"))
+
+# Fallback / Random Replies agar Gemini API limit cross ho jaye ya error aaye
+FALLBACK_REPLIES = [
+    "Arey bhai bilkul! Sahi keh rahe ho aap! 😉🔥",
+    "Haha true yaar! Ekdum mast baat boli aapne! 🥂",
+    "Sahi hai boss! Main samajh raha hu aapki baat ko. 😎✌️",
+    "Acha ji? Phir batao aage kya plan hai phir? 🤔",
+    "Kasam se, yeh wali baat ekdam dil pe lag gayi! ❤️✨",
+    "Arre wah! Kya baat hai bhai, maza aa gaya sunkar! 🚀",
+    "Sahi ja rahe ho dost! Aise hi lage raho! 💯",
+    "Hmm, yeh toh socha hi nahi tha maine! Sahi hai waise. 🧐",
+    "Arey chhodho in baaton ko, kuch naya sunao! 🍻",
+    "Ekdum sahi time par yaad dilaya aapne yeh toh! 🎯",
+    "Bhai thoda busy hu yaar, baad me baat karte hain! 🏃‍♂️💨",
+    "Acha ji, aisi baat hai kya? Phir toh party banti hai! 🎉",
+    "Sahi hai yaar, tumhara koi jawab nahi! 🔥",
+    "Bilkul bhai, agree karta hu aapki is baat se! 👍",
+    "Arre mere sher! Ekdum faadu jawab diya aapne! 🦁✨"
+]
 
 async def check_subscription(bot, user_id):
     if not FORCE_CHANNEL or FORCE_CHANNEL == "@YourChannelName":
@@ -27,10 +55,10 @@ async def check_subscription(bot, user_id):
         if member.status in ["member", "administrator", "creator"]:
             return True
     except Exception as e:
-        print(f"Force Sub Check Error: {e}")
+        add_log(f"Force Sub Error: {e}")
     return False
 
-# Background Userbot runner with AI logic
+# Background Userbot runner with Fallback mechanism
 async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
     try:
         if user_id in running_userbots:
@@ -42,16 +70,25 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
         if user_id not in user_data:
             user_data[user_id] = {}
         user_data[user_id]["ai_enabled"] = True
+        add_log(f"Userbot successfully connected for user ID: {user_id}")
 
         @client.on(events.NewMessage(pattern=r'\.aion', outgoing=True))
         async def turn_on(event):
             user_data[user_id]["ai_enabled"] = True
-            await event.edit("✅ **Gemini AI Auto-Reply Activated via Bot!**")
+            add_log(f"AI Activated (.aion) by user {user_id}")
+            try:
+                await event.edit("✅ **Gemini AI & Fallback Auto-Reply Activated!**")
+            except:
+                pass
 
         @client.on(events.NewMessage(pattern=r'\.aioff', outgoing=True))
         async def turn_off(event):
             user_data[user_id]["ai_enabled"] = False
-            await event.edit("❌ **Gemini AI Auto-Reply Deactivated!**")
+            add_log(f"AI Deactivated (.aioff) by user {user_id}")
+            try:
+                await event.edit("❌ **Gemini AI Auto-Reply Deactivated!**")
+            except:
+                pass
 
         @client.on(events.NewMessage())
         async def handle_incoming(event):
@@ -63,6 +100,8 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                 chat = await event.get_chat()
                 if not getattr(chat, 'megagroup', False) and not getattr(chat, 'gigagroup', False):
                     return
+
+            reply_text = None
             try:
                 sender = await event.get_sender()
                 user_name = sender.first_name if sender and sender.first_name else "Dost"
@@ -74,88 +113,77 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                 )
 
                 await asyncio.sleep(1)
+                # Gemini API call try karenge
                 response = ai_client.models.generate_content(
-                    model="gemini-3.8-flash",
+                    model="gemini-1.5-flash",
                     contents=event.raw_text,
                     config=types.GenerateContentConfig(system_instruction=sys_prompt)
                 )
                 if response and response.text:
-                    await event.reply(response.text)
-            except Exception as e:
-                print(f"Userbot Error for user {user_id}: {e}")
+                    reply_text = response.text
+            except Exception as api_err:
+                add_log(f"Gemini Limit/Error (Using Fallback): {api_err}")
+                # Agar Gemini fail ho ya limit lage, toh random fallback message utha lo
+                reply_text = random.choice(FALLBACK_REPLIES)
+
+            if reply_text:
+                try:
+                    await event.reply(reply_text)
+                    add_log(f"Auto-Reply sent in chat {event.chat_id}")
+                except Exception as send_err:
+                    add_log(f"Send Error: {send_err}")
 
         await client.start()
         running_userbots[user_id] = client
-        print(f"Successfully hosted userbot for user: {user_id}")
         await client.run_until_disconnected()
         
     except Exception as e:
-        print(f"Failed to start userbot for {user_id}: {e}")
+        add_log(f"Failed userbot for {user_id}: {e}")
 
-# /start command with Force Subscribe & Owner Check
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
-    # Force Subscribe check
     is_subbed = await check_subscription(context.bot, user_id)
     if not is_subbed:
         keyboard = [
             [InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{FORCE_CHANNEL.replace('@', '')}")],
             [InlineKeyboardButton("🔄 Joined / Check Again", callback_data="check_sub")]
         ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(
-            "⚠️ **Access Denied!**\n\n"
-            f"Pehle hamare channel {FORCE_CHANNEL} ko join karo, phir niche 'Joined / Check Again' par click karo!",
-            reply_markup=reply_markup
+            "⚠️ **Access Denied!**\n\nPehle channel join karo phir check karo!",
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
 
-    # Owner Special Panel vs Normal User Setup Panel
     if OWNER_ID and user_id == OWNER_ID:
         keyboard = [
             [InlineKeyboardButton("🚀 Host / Setup Account", callback_data="start_setup")],
-            [InlineKeyboardButton("👑 Owner Control Panel", callback_data="owner_panel")],
+            [InlineKeyboardButton("👑 Owner Control & Logs", callback_data="owner_panel")],
             [InlineKeyboardButton("🔵 Bot Status: ONLINE 🟢", callback_data="status")]
         ]
-        text = "👑 **Welcome Boss / Owner!**\n\nTumhara Special Owner Panel ready hai. Apna account host karne ke liye niche click karo:"
+        text = "👑 **Welcome Boss!** Owner Panel ready hai:"
     else:
         keyboard = [
             [InlineKeyboardButton("🚀 Host / Setup Account", callback_data="start_setup")],
             [InlineKeyboardButton("🔵 Bot Status: ONLINE 🟢", callback_data="status")]
         ]
-        text = "👋 **Welcome to AI Userbot Host Bot!**\n\nChannel verification successful! ✅\nNeeche diye gaye button par click karke details enter karna shuru karo:"
+        text = "👋 **Welcome to AI Userbot Host Bot!**\n\nNeeche click karke setup shuru karo:"
 
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(text, reply_markup=reply_markup)
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
-# Callback query handler
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
 
     if query.data == "check_sub":
-        is_subbed = await check_subscription(context.bot, user_id)
-        if is_subbed:
+        if await check_subscription(context.bot, user_id):
+            keyboard = [[InlineKeyboardButton("🚀 Host / Setup Account", callback_data="start_setup")]]
             if OWNER_ID and user_id == OWNER_ID:
-                keyboard = [
-                    [InlineKeyboardButton("🚀 Host / Setup Account", callback_data="start_setup")],
-                    [InlineKeyboardButton("👑 Owner Control Panel", callback_data="owner_panel")],
-                    [InlineKeyboardButton("🔵 Bot Status: ONLINE 🟢", callback_data="status")]
-                ]
-                text = "✅ **Verified Boss!** Owner Control Panel ready hai:"
-            else:
-                keyboard = [
-                    [InlineKeyboardButton("🚀 Host / Setup Account", callback_data="start_setup")],
-                    [InlineKeyboardButton("🔵 Bot Status: ONLINE 🟢", callback_data="status")]
-                ]
-                text = "✅ **Channel Verified Successfully!** Ab account host karne ke liye niche button par click karo:"
-            
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await query.edit_message_text(text, reply_markup=reply_markup)
+                keyboard.append([InlineKeyboardButton("👑 Owner Control & Logs", callback_data="owner_panel")])
+            await query.edit_message_text("✅ Verified! Ab setup par click karo:", reply_markup=InlineKeyboardMarkup(keyboard))
         else:
-            await query.answer("❌ Tumne abhi tak channel join nahi kiya hai!", show_alert=True)
+            await query.answer("❌ Pehle channel join karo!", show_alert=True)
 
     elif query.data == "owner_panel":
         if user_id != OWNER_ID:
@@ -164,72 +192,59 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         active_count = len(running_userbots)
         keyboard = [
-            [InlineKeyboardButton(f"📊 Active Userbots: {active_count}", callback_data="status")],
+            [InlineKeyboardButton("🔄 Refresh Panel", callback_data="owner_panel"), InlineKeyboardButton("📋 View Live Logs", callback_data="view_logs")],
             [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="main_menu")]
         ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            f"👑 **Owner Statistics & Control**\n\n"
-            f"• Total Active Hosted Bots: `{active_count}`\n"
-            f"• Bot Status: `Running Smoothly 🚀`",
-            reply_markup=reply_markup
+            f"👑 **Owner Control Panel & Logs**\n\n"
+            f"• Active Hosted Userbots: `{active_count}`\n"
+            f"• System Status: `Running with Fallback Protection 🚀`",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+    elif query.data == "view_logs":
+        if user_id != OWNER_ID:
+            return
+        logs_text = "\n".join(recent_logs[-12:]) if recent_logs else "Koi logs abhi available nahi hain."
+        keyboard = [
+            [InlineKeyboardButton("🔄 Refresh Logs", callback_data="view_logs")],
+            [InlineKeyboardButton("🔙 Back to Owner Panel", callback_data="owner_panel")]
+        ]
+        await query.edit_message_text(
+            f"📋 **Live System Logs:**\n\n```text\n{logs_text}\n```",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
     elif query.data == "main_menu":
+        keyboard = [[InlineKeyboardButton("🚀 Host / Setup Account", callback_data="start_setup")]]
         if OWNER_ID and user_id == OWNER_ID:
-            keyboard = [
-                [InlineKeyboardButton("🚀 Host / Setup Account", callback_data="start_setup")],
-                [InlineKeyboardButton("👑 Owner Control Panel", callback_data="owner_panel")],
-                [InlineKeyboardButton("🔵 Bot Status: ONLINE 🟢", callback_data="status")]
-            ]
-        else:
-            keyboard = [
-                [InlineKeyboardButton("🚀 Host / Setup Account", callback_data="start_setup")],
-                [InlineKeyboardButton("🔵 Bot Status: ONLINE 🟢", callback_data="status")]
-            ]
+            keyboard.append([InlineKeyboardButton("👑 Owner Control & Logs", callback_data="owner_panel")])
         await query.edit_message_text("👋 **Main Menu:**", reply_markup=InlineKeyboardMarkup(keyboard))
 
     elif query.data == "start_setup":
         user_data[user_id] = {"step": "API_ID"}
-        await query.edit_message_text(
-            "📝 **Step 1/4: API ID**\n\n"
-            "Apni Telegram **API ID** bhejo (Numbers me hoti hai, jaise `12345678`):"
-        )
+        await query.edit_message_text("📝 **Step 1/4: API ID**\n\nApni Telegram API ID bhejo:")
 
     elif query.data == "ai_on":
         if user_id in user_data:
             user_data[user_id]["ai_enabled"] = True
-            await query.edit_message_text(
-                "🟢 **Gemini AI Auto-Reply Status: ACTIVE**\n\nTumhara AI auto-reply successfully chalu ho gaya hai! ✨",
-                reply_markup=get_control_panel_markup(True)
-            )
+            await query.edit_message_text("🟢 **AI Status: ACTIVE**", reply_markup=get_control_panel(True))
 
     elif query.data == "ai_off":
         if user_id in user_data:
             user_data[user_id]["ai_enabled"] = False
-            await query.edit_message_text(
-                "🔴 **Gemini AI Auto-Reply Status: INACTIVE (Stopped)**\n\nTumhara AI auto-reply rok diya gaya hai! 🛑",
-                reply_markup=get_control_panel_markup(False)
-            )
+            await query.edit_message_text("🔴 **AI Status: INACTIVE**", reply_markup=get_control_panel(False))
 
-def get_control_panel_markup(is_enabled):
+def get_control_panel(is_enabled):
     if is_enabled:
-        keyboard = [
-            [InlineKeyboardButton("🔴 Turn OFF AI (Stop)", callback_data="ai_off")],
-            [InlineKeyboardButton("🔵 Control Panel: ACTIVE 🟢", callback_data="status")]
-        ]
+        return InlineKeyboardMarkup([[InlineKeyboardButton("🔴 Turn OFF AI", callback_data="ai_off")]])
     else:
-        keyboard = [
-            [InlineKeyboardButton("🟢 Turn ON AI (Start)", callback_data="ai_on")],
-            [InlineKeyboardButton("🔵 Control Panel: INACTIVE 🔴", callback_data="status")]
-        ]
-    return InlineKeyboardMarkup(keyboard)
+        return InlineKeyboardMarkup([[InlineKeyboardButton("🟢 Turn ON AI", callback_data="ai_on")]])
 
-# Message handler for step-by-step credentials
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in user_data or "step" not in user_data[user_id]:
-        await update.message.reply_text("Pehle /start command bhejo bhai!")
         return
 
     step = user_data[user_id].get("step")
@@ -238,17 +253,17 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if step == "API_ID":
         user_data[user_id]["api_id"] = text
         user_data[user_id]["step"] = "API_HASH"
-        await update.message.reply_text("✅ **API ID Saved!**\n\n📝 **Step 2/4: API HASH**\n\nAb apni Telegram **API HASH** bhejo:")
+        await update.message.reply_text("✅ API ID saved!\n\nAb apni **API HASH** bhejo:")
 
     elif step == "API_HASH":
         user_data[user_id]["api_hash"] = text
         user_data[user_id]["step"] = "SESSION"
-        await update.message.reply_text("✅ **API Hash Saved!**\n\n📝 **Step 3/4: SESSION STRING**\n\nAb apna Telethon **SESSION STRING** bhejo:")
+        await update.message.reply_text("✅ API Hash saved!\n\nAb apna **SESSION STRING** bhejo:")
 
     elif step == "SESSION":
         user_data[user_id]["session"] = text
         user_data[user_id]["step"] = "GEMINI_KEY"
-        await update.message.reply_text("✅ **Session String Saved!**\n\n📝 **Step 4/4: GEMINI API KEY**\n\nAkhir me apni **GEMINI API KEY** bhejo:")
+        await update.message.reply_text("✅ Session saved!\n\nAkhir mein apni **GEMINI API KEY** bhejo:")
 
     elif step == "GEMINI_KEY":
         api_id = user_data[user_id]["api_id"]
@@ -258,26 +273,23 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         user_data[user_id].pop("step")
         user_data[user_id]["ai_enabled"] = True
+        add_log(f"New user {user_id} completed setup successfully.")
 
         await update.message.reply_text(
-            "🎉 **Setup Complete & Host Started!**\n\n"
-            "Tumhari saari details mil gayi hain aur userbot background mein live ho gaya hai!\n"
-            "Neeche diye gaye colorful control panel se tum kabhi bhi AI ko control kar sakte ho:",
-            reply_markup=get_control_panel_markup(True)
+            "🎉 **Setup Complete & Host Started!**\n\nAb group mein `.aion` bhejo aur maza lo!",
+            reply_markup=get_control_panel(True)
         )
-
         asyncio.create_task(run_userbot(user_id, api_id, api_hash, session, gemini_key))
 
 if __name__ == "__main__":
     BOT_TOKEN = os.getenv("BOT_TOKEN")
     if not BOT_TOKEN:
-        raise ValueError("BOT_TOKEN environment variable is missing!")
+        raise ValueError("BOT_TOKEN missing!")
     
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), message_handler))
     
-    print("Manager Bot with Owner Panel & Verification is running...")
+    print("Manager Bot with Fallback & Live Logs is running...")
     app.run_polling()
