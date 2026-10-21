@@ -142,8 +142,8 @@ async def check_subscription(bot, user_id):
     return False
 
 def generate_ai_response_safely(ai_client, text, sys_prompt, user_id=None):
-    # Updated to active official models to prevent 404 NOT_FOUND errors
-    models_to_try = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-exp"]
+    # Using generalized stable identifiers for Google GenAI SDK
+    models_to_try = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-flash"]
     for model_name in models_to_try:
         try:
             response = ai_client.models.generate_content(
@@ -153,7 +153,7 @@ def generate_ai_response_safely(ai_client, text, sys_prompt, user_id=None):
             )
             if response and response.text:
                 if user_id:
-                    add_user_log(user_id, f"Gemini AI Human Replica Success [{model_name}]", "success")
+                    add_user_log(user_id, f"Gemini AI Success [{model_name}]", "success")
                 return response.text
         except Exception as err:
             err_msg = str(err)
@@ -220,7 +220,7 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                     save_db()
                 add_user_log(user_id, f"Deactivated in Chat: {chat_id}", "warn")
                 try:
-                    await event.edit("PR **[STOPPED] Auto-Reply Turned OFF for THIS Group!**")
+                    await event.edit("🟥 **[STOPPED] Auto-Reply Turned OFF for THIS Group!**")
                 except:
                     pass
 
@@ -270,9 +270,8 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                         sender = await event.get_sender()
                         user_name = sender.first_name if sender and sender.first_name else "Dost"
                         
-                        # Perfect Human-like Assistant Prompt
                         sys_prompt = (
-                            f"Aap real person '{my_firstname}' ho. Telegram group/chat me '{user_name}' se baat kar rahe ho. "
+                            f"Aap real person '{my_firstname}' ho. Telegram chat me '{user_name}' se baat kar rahe ho. "
                             f"Ekdum natural, human jaisa, cool, smart aur friendly Hinglish me jawab do. "
                             f"Short aur engaging reply do with emojis like a real online friend."
                         )
@@ -371,7 +370,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("🟩 Verify Subscription", callback_data="check_sub")]
         ]
         await update.message.reply_text(
-            "PR **ACCESS DENIED!**\n\nPehle official channel join karein!",
+            "🟥 **ACCESS DENIED!**\n\nPehle official channel join karein!",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
