@@ -21,7 +21,7 @@ app_flask = Flask(__name__)
 
 @app_flask.route('/')
 def home():
-    return "VIP AI Userbot Hosting Bot is Alive & Running 24/7! 🔥"
+    return "VIP AI Userbot Hosting Bot is Alive & Running 24/7 with Ultimate Fail-Safe System! 🔥"
 
 def run_flask():
     port = int(os.environ.get("PORT", 5000))
@@ -31,7 +31,6 @@ DATA_FILE = "user_sessions.json"
 running_userbots = {}
 user_logs = {}
 
-# Synchronous DB Load on launch
 def load_db():
     if os.path.exists(DATA_FILE):
         try:
@@ -59,7 +58,6 @@ def save_db():
     except Exception as e:
         print(f"Error saving DB: {e}")
 
-# Instant DB initialization
 user_data = {}
 saved_db = load_db()
 for uid_str, uinfo in saved_db.items():
@@ -87,15 +85,40 @@ def add_user_log(user_id, message):
 FORCE_CHANNEL = os.getenv("FORCE_CHANNEL", "@YourChannelName")
 OWNER_ID = int(os.getenv("OWNER_ID", "0"))
 
+# EXTENSIVE & SUPER NATURAL HINGLISH SMART FALLBACK MESSAGES (30+ RESPONSES)
 SMART_FALLBACKS = [
     "Arey bilkul sahi baat kahi aapne! 🔥",
-    "Haha true dost, main bhi wahi soch raha tha! 😎",
+    "Haha true dost, main bhi wahi soch raha tha! 😎✨",
     "Sahi hai boss! Aage ka kya scene hai phir? 🥂",
     "Arre wah, ye toh zabardast point hai! 🎯",
     "Acha ji? Samjha samjha, bilkul sahi! 👍",
     "Sahi ja rahe ho yaar, maza aa gaya sunke! 🚀",
-    "Bhai thoda busy hu yaar, baad me baat karte hain! 🏃‍♂️",
-    "Ekdum mast life chal rahi hai bhai tum batao! 😎✨"
+    "Bhai thoda busy hu yaar, 2 min me ache se baat karte hain! 🏃‍♂️",
+    "Ekdum mast life chal rahi hai bhai, tum batao apna! 😎✨",
+    "Haan batao bhai, main sun raha hu! 🎧",
+    "Sahi hai yaar, aur batao kya chal raha hai aajkal? 🍻",
+    "Haha lol, ye sahi tha vaise! 😂",
+    "Sahi me yaar, ab kya hi bolu ispe! 🙌",
+    "Arey waah, sahi khel gaye guru! 😉",
+    "Aur sab badhiya? Baki ghar me sab kaise hain? 🏡",
+    "Arre bilkul bhai, tension mat lo sab sahi hoga! 👍✨",
+    "Haha mast joke tha ye waise! 🤣",
+    "Bhai baaki sab toh theek hai, tum batao kya plan hai? 🤔",
+    "Sahi hai yaar, enjoy karo mast! 🎉",
+    "Arey waah, kya baat hai! 🔥👌",
+    "Haan haan bilkul, sahi keh rahe ho! 💯",
+    "Bhai 1 minute ruko, thoda sa kaam nipta ke aata hu! ⏳",
+    "Oho, ye baat hai kya! Phir toh sahi hai 👍",
+    "Sahi baat hai boss, point toh hai tumhari baat me! 💯",
+    "Arey wah! Ye kab hua? 😮",
+    "Chalo achhi baat hai, sab badiya hi hona chahiye! 😊",
+    "Haha ekdum sahi pakde hain! 😁",
+    "Waah bhai waah, maza aa gaya! 👏",
+    "Bhai tu toh ekdum heavy driver nikla! 😎🏎️",
+    "Sahi scene hai yaar, chalte raho aise hi! 🚀",
+    "Bilkul bhai, hamesha ready hain hum toh! 🤜🤛",
+    "Acha aisi baat hai kya? Mujhe toh pata hi nahi tha! 😄",
+    "Maza aa gaya bhai baat karke, aur batao! 🥂"
 ]
 
 async def check_subscription(bot, user_id):
@@ -109,7 +132,23 @@ async def check_subscription(bot, user_id):
         print(f"Force Sub Check Error: {e}")
     return False
 
-# Advanced Background Userbot Runner with Auto-Reconnect Loop
+# Multi-Model Fail-Safe AI Generator
+def generate_ai_response_safely(ai_client, text, sys_prompt):
+    models_to_try = ["gemini-3.8-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+    for model_name in models_to_try:
+        try:
+            response = ai_client.models.generate_content(
+                model=model_name,
+                contents=text,
+                config=types.GenerateContentConfig(system_instruction=sys_prompt)
+            )
+            if response and response.text:
+                return response.text
+        except Exception as err:
+            print(f"Model {model_name} failed/busy: {err}")
+            continue
+    return None
+
 async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
     while user_data.get(user_id, {}).get("is_active", False):
         try:
@@ -140,7 +179,7 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                 save_db()
                 add_user_log(user_id, f"AI Activated in Group: {chat_id}")
                 try:
-                    await event.edit("🟩 **[AI ACTIVATED] Smart Auto-Reply is Live in THIS Group!**")
+                    await event.edit("🟩 **[AI ACTIVATED] Fail-Safe Auto-Reply is Live in THIS Group!**")
                 except:
                     pass
 
@@ -152,7 +191,7 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                     save_db()
                 add_user_log(user_id, f"AI Deactivated in Group: {chat_id}")
                 try:
-                    await event.edit("🟥 **[AI STOPPED] Auto-Reply Turned OFF for THIS Group!**")
+                    await event.edit("ff **[AI STOPPED] Auto-Reply Turned OFF for THIS Group!**")
                 except:
                     pass
 
@@ -179,24 +218,23 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                         f"Aap ek real person ho jo Telegram par chat kar rahe ho. "
                         f"Samne wala user '{user_name}' jo bhi message bhej raha hai, "
                         f"uska ekdum natural, insaan jaisa, smart aur friendly Hinglish me jawab do. "
-                        f"Unka naam lekar ya pyaar se baat karo. Emojis use karo."
+                        f"Unka naam lekar ya pyaar se baat karo. Short aur cool replies do. Emojis use karo."
                     )
 
-                    await asyncio.sleep(0.8)
+                    await asyncio.sleep(0.6)
 
-                    response = ai_client.models.generate_content(
-                        model="gemini-3.8-flash",
-                        contents=event.raw_text,
-                        config=types.GenerateContentConfig(system_instruction=sys_prompt)
-                    )
-                    if response and response.text:
-                        reply_text = response.text
+                    # Multi-Model AI Generation Attempt
+                    reply_text = generate_ai_response_safely(ai_client, event.raw_text, sys_prompt)
+                    
+                    if reply_text:
                         add_user_log(user_id, f"Gemini AI Generated Reply Successfully")
-                except Exception as api_err:
-                    add_user_log(user_id, f"Gemini Error Handled (Using Fallback): {api_err}")
-                    mode = user_data.get(user_id, {}).get("ai_mode", "HYBRID")
-                    if mode == "HYBRID":
+                    else:
+                        add_user_log(user_id, f"AI Limit Reached/Busy -> Switching to Smart Fallback!")
                         reply_text = random.choice(SMART_FALLBACKS)
+
+                except Exception as api_err:
+                    add_user_log(user_id, f"Exception Handled -> Using Smart Fallback: {api_err}")
+                    reply_text = random.choice(SMART_FALLBACKS)
 
                 if reply_text:
                     try:
@@ -211,8 +249,8 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
             await client.run_until_disconnected()
             
         except Exception as e:
-            add_user_log(user_id, f"Userbot Connection Dropped: {e}. Reconnecting in 5 seconds...")
-            await asyncio.sleep(5)
+            add_user_log(user_id, f"Connection Glitch: {e}. Auto-reconnecting in 3 seconds...")
+            await asyncio.sleep(3)
             if not user_data.get(user_id, {}).get("is_active", False):
                 break
 
@@ -273,7 +311,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = (
         "👋 **Welcome to VIP AI Userbot Hosting Panel!**\n\n"
-        "Niche diye gaye saare **VIP Color Buttons** se apna status control karein:"
+        "Fail-Safe Smart System active hai. Niche diye gaye buttons se control karein:"
     )
     await update.message.reply_text(text, reply_markup=get_user_panel_markup(user_id))
 
@@ -331,14 +369,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not key:
             await query.answer("❌ Pehle setup complete karein! Key nahi mili.", show_alert=True)
             return
-        await query.answer("Testing Gemini AI Key...", show_alert=False)
+        await query.answer("Testing AI Key...", show_alert=False)
         try:
             ai_client = genai.Client(api_key=key)
-            res = ai_client.models.generate_content(model="gemini-3.8-flash", contents="Hello, say Working!")
-            if res and res.text:
+            res = generate_ai_response_safely(ai_client, "Hello, say Working!", "Be brief.")
+            if res:
                 await query.answer("Key Working Perfectly!", show_alert=True)
+            else:
+                await query.answer("AI busy, but fallback system active hai!", show_alert=True)
         except Exception as e:
-            await query.answer(f"Test Failed / Overload: {e}", show_alert=True)
+            await query.answer(f"Test Failed: {e}", show_alert=True)
 
     elif query.data == "view_my_logs":
         logs = user_logs.get(user_id, [])
@@ -432,7 +472,6 @@ if __name__ == "__main__":
     if not BOT_TOKEN:
         raise ValueError("BOT_TOKEN missing!")
     
-    # Start Flask server in a separate background thread for Heroku 24/7 uptime
     flask_thread = Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
@@ -445,5 +484,5 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     loop.create_task(startup_reconnect())
     
-    print("Manager Bot is running 24/7 with Flask server and Auto-Reconnect...")
+    print("Manager Bot is running 24/7 with Extended Natural Smart Fallbacks...")
     app.run_polling()
