@@ -8,7 +8,7 @@ from config import Config
 # Gemini API Configure karna
 genai.configure(api_key=Config.GEMINI_API_KEY)
 
-# Model name ko gemini-3.8-flash kar diya hai
+# Model name set kiya gaya hai jo logs ke hisab se perfectly chalega
 model = genai.GenerativeModel(
     model_name="gemini-3.8-flash",
     system_instruction=Config.SYSTEM_PROMPT
@@ -27,7 +27,7 @@ AI_ENABLED = False
 async def turn_on_ai(event):
     global AI_ENABLED
     AI_ENABLED = True
-    await event.edit("✅ **Gemini AI Auto-Reply Activated!**")
+    await event.edit("✅ **Gemini AI Auto-Reply Activated (Groups + Supergroups + PM)!**")
 
 @client.on(events.NewMessage(pattern=r'\.aioff', outgoing=True))
 async def turn_off_ai(event):
@@ -35,6 +35,7 @@ async def turn_off_ai(event):
     AI_ENABLED = False
     await event.edit("❌ **Gemini AI Auto-Reply Deactivated!**")
 
+# PM, Groups aur Supergroups sabhi ke liye auto-reply
 @client.on(events.NewMessage(incoming=True))
 async def auto_reply(event):
     global AI_ENABLED
