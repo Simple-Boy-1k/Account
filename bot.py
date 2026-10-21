@@ -18,7 +18,7 @@ DATA_FILE = "user_sessions.json"
 running_userbots = {}
 user_logs = {}
 
-# Synchronous DB Load on launch
+# Synchronous DB Load on launch taaki session kabhi loss na ho
 def load_db():
     if os.path.exists(DATA_FILE):
         try:
@@ -115,6 +115,7 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
         save_db()
         add_user_log(user_id, "Account Online & Connected to Telegram!")
 
+        # Group me AI ON karne ka command (.aion)
         @client.on(events.NewMessage(pattern=r'\.aion', outgoing=True))
         async def turn_on(event):
             if not user_data.get(user_id, {}).get("is_active", True):
@@ -128,6 +129,7 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
             except:
                 pass
 
+        # Group me AI OFF karne ka command (.aioff)
         @client.on(events.NewMessage(pattern=r'\.aioff', outgoing=True))
         async def turn_off(event):
             chat_id = event.chat_id
@@ -153,31 +155,31 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                 return
 
             reply_text = None
-            add_user_log(user_id, f"New Message in Chat {chat_id}")
+            add_user_log(user_id, f"New Message in Chat {chat_id}: '{event.raw_text}'")
 
             try:
                 sender = await event.get_sender()
                 user_name = sender.first_name if sender and sender.first_name else "Dost"
                 
                 sys_prompt = (
-                    f"Aap ek real person ho jo Telegram account se chat kar rahe ho. "
-                    f"Aapko samne wale user '{user_name}' ki baat ka exact, context-based aur bilkul accurate reply dena hai. "
-                    f"Agar woh pooche ki 'kaise ho', 'kya kar rahe ho', 'account active hai kya', toh naturally Hinglish me jawab do. "
-                    f"Reply hamesha short, smart, cool aur friendly rakho."
+                    f"Aap ek real person ho jo Telegram par chat kar rahe ho. "
+                    f"Samne wala user '{user_name}' jo bhi message bhej raha hai, "
+                    f"uska ekdum natural, insaan jaisa, smart aur friendly Hinglish me jawab do. "
+                    f"Unka naam lekar ya pyaar se baat karo. Emojis use karo."
                 )
 
-                await asyncio.sleep(1.2)
+                await asyncio.sleep(1.0)
 
                 response = ai_client.models.generate_content(
-                    model="gemini-1.5-flash",
+                    model="gemini-2.5-flash",
                     contents=event.raw_text,
                     config=types.GenerateContentConfig(system_instruction=sys_prompt)
                 )
                 if response and response.text:
                     reply_text = response.text
-                    add_user_log(user_id, f"Gemini AI Generated Exact Context Reply")
+                    add_user_log(user_id, f"Gemini AI Generated Real Context Reply")
             except Exception as api_err:
-                add_user_log(user_id, f"Gemini Limit/Error: {api_err}")
+                add_user_log(user_id, f"Gemini Error: {api_err}")
                 mode = user_data.get(user_id, {}).get("ai_mode", "HYBRID")
                 if mode == "HYBRID":
                     reply_text = random.choice(SMART_FALLBACKS)
@@ -187,7 +189,7 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                     await event.reply(reply_text)
                     add_user_log(user_id, f"Auto-Reply Sent Successfully!")
                 except Exception as send_err:
-                    add_user_log(user_id, f"Send Rate Limit Error: {send_err}")
+                    add_user_log(user_id, f"Send Error: {send_err}")
                     await asyncio.sleep(3)
 
         await client.start()
@@ -209,35 +211,32 @@ async def stop_userbot(user_id):
         save_db()
     add_user_log(user_id, "Hosting Deactivated by User.")
 
-# STRICT COLOR BLOCKS BUTTON INTERFACE (NO FACE EMOJIS)
+# Full VIP Dashboard Markup with Working Color Buttons
 def get_user_panel_markup(user_id):
     is_active = user_data.get(user_id, {}).get("is_active", False)
     has_session = "session" in user_data.get(user_id, {})
     ai_mode = user_data.get(user_id, {}).get("ai_mode", "HYBRID")
     
     keyboard = []
-    if not has_session:
-        keyboard.append([InlineKeyboardButton("🟦 HOST / SETUP ACCOUNT NOW 🟦", callback_data="start_setup")])
+    
+    if is_active and has_session:
+        keyboard.append([InlineKeyboardButton("🟥 DEACTIVATE HOSTING (STOP) 🟥", callback_data="deactivate_host")])
+        keyboard.append([InlineKeyboardButton("🟩 STATUS: HOSTING ACTIVE 🟩", callback_data="status_info")])
     else:
-        if is_active:
-            keyboard.append([InlineKeyboardButton("🟥 DEACTIVATE HOSTING (STOP) 🟥", callback_data="deactivate_host")])
-            status_text = "🟩 STATUS: HOSTING ACTIVE 🟩"
-        else:
-            keyboard.append([InlineKeyboardButton("🟩 ACTIVATE HOSTING (START) 🟩", callback_data="activate_host")])
-            status_text = "🟥 STATUS: DEACTIVATED 🟥"
-        
-        keyboard.append([InlineKeyboardButton(status_text, callback_data="status_info")])
-        keyboard.append([
-            InlineKeyboardButton("🟦 LIVE LOGS 🟦", callback_data="view_my_logs"),
-            InlineKeyboardButton(f"🟨 MODE: {ai_mode} 🟨", callback_data="toggle_mode")
-        ])
-        keyboard.append([
-            InlineKeyboardButton("🟩 TEST AI KEY 🟩", callback_data="test_ai"),
-            InlineKeyboardButton("🟧 RE-ENTER DATA 🟧", callback_data="start_setup")
-        ])
+        keyboard.append([InlineKeyboardButton("🟩 ACTIVATE HOSTING (START) 🟩", callback_data="activate_host")])
+        keyboard.append([InlineKeyboardButton("🟥 STATUS: DEACTIVATED 🟥", callback_data="status_info")])
+    
+    keyboard.append([
+        InlineKeyboardButton("🟦 LIVE LOGS 🟦", callback_data="view_my_logs"),
+        InlineKeyboardButton(f"🟨 MODE: {ai_mode} 🟨", callback_data="toggle_mode")
+    ])
+    keyboard.append([
+        InlineKeyboardButton("🟩 TEST AI KEY 🟩", callback_data="test_ai"),
+        InlineKeyboardButton("🟧 RE-ENTER SETUP DATA 🟧", callback_data="start_setup")
+    ])
 
     if OWNER_ID and user_id == OWNER_ID:
-        keyboard.append([InlineKeyboardButton("🟥 OWNER CONTROL PANEL 🟥", callback_data="owner_panel")])
+        keyboard.append([InlineKeyboardButton("🟥 OWNER CONTROL PANEL 🚨 🟥", callback_data="owner_panel")])
         
     return InlineKeyboardMarkup(keyboard)
 
@@ -257,8 +256,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     text = (
-        "**Welcome to VIP AI Userbot Hosting Panel!**\n\n"
-        "Apka account saved hai. Niche color dashboard se status manage karein:"
+        "👋 **Welcome to VIP AI Userbot Hosting Panel!**\n\n"
+        "Niche diye gaye saare **VIP Color Buttons** se apna status control karein:"
     )
     await update.message.reply_text(text, reply_markup=get_user_panel_markup(user_id))
 
@@ -285,7 +284,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "activate_host":
         uinfo = user_data.get(user_id, {})
-        if "session" in uinfo:
+        if "session" in uinfo and uinfo["session"]:
             user_data[user_id]["is_active"] = True
             save_db()
             await query.edit_message_text("🟦 **ACTIVATING HOSTING...** Please wait...")
@@ -298,7 +297,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=get_user_panel_markup(user_id)
             )
         else:
-            await query.answer("Pehle account setup karein!", show_alert=True)
+            await query.answer("❌ Pehle 'RE-ENTER SETUP DATA' par click karke details submit karein!", show_alert=True)
 
     elif query.data == "toggle_mode":
         current_mode = user_data.get(user_id, {}).get("ai_mode", "HYBRID")
@@ -314,12 +313,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         uinfo = user_data.get(user_id, {})
         key = uinfo.get("gemini_key")
         if not key:
-            await query.answer("Gemini Key Nahi Mili!", show_alert=True)
+            await query.answer("❌ Pehle setup complete karein! Key nahi mili.", show_alert=True)
             return
         await query.answer("Testing Gemini AI Key...", show_alert=False)
         try:
             ai_client = genai.Client(api_key=key)
-            res = ai_client.models.generate_content(model="gemini-1.5-flash", contents="Hello, say Working!")
+            res = ai_client.models.generate_content(model="gemini-2.5-flash", contents="Hello, say Working!")
             if res and res.text:
                 await query.answer("Key Working Perfectly!", show_alert=True)
         except Exception as e:
@@ -345,7 +344,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         active_count = len(running_userbots)
         total_users = len(user_data)
         keyboard = [
-            [InlineKeyboardButton("🟥 REFRESH PANEL 🟥", callback_data="owner_panel")],
+            [InlineKeyboardButton("🟥 REFRESH PANEL 🔴", callback_data="owner_panel")],
             [InlineKeyboardButton("🟦 BACK TO MAIN MENU 🟦", callback_data="main_menu")]
         ]
         await query.edit_message_text(
@@ -354,7 +353,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif query.data == "main_menu":
-        await query.edit_message_text("**VIP Hosting Dashboard:**", reply_markup=get_user_panel_markup(user_id))
+        await query.edit_message_text("👋 **VIP Hosting Dashboard:**", reply_markup=get_user_panel_markup(user_id))
 
     elif query.data == "start_setup":
         if user_id not in user_data:
@@ -398,7 +397,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             "🟩 **Setup Complete & Hosting Started!**\n\n"
-            "Account live ho chuka hai! Group me **`.aion`** bhej kar AI active karein.",
+            "Account live ho chuka hai! Group me **`.aion`** bhej kar AI active karein, aur **`.aioff`** se band karein.",
             reply_markup=get_user_panel_markup(user_id)
         )
         asyncio.create_task(run_userbot(user_id, api_id, api_hash, session, gemini_key))
@@ -425,5 +424,5 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     loop.create_task(startup_reconnect())
     
-    print("Manager Bot is running with clean solid color block UI...")
+    print("Manager Bot is running A to Z with full functionality...")
     app.run_polling()
