@@ -1,41 +1,10 @@
 {
-  "name": "Telegram Gemini AI Userbot",
-  "description": "Telegram Auto Reply Userbot Powered by Gemini API with Config Setup",
-  "keywords": ["telegram", "userbot", "pyrogram", "gemini", "ai"],
-  "repository": "https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME",
-  "website": "https://telegram.org",
+  "name": "Telegram AI Host Bot",
+  "description": "Host custom userbots with Gemini AI, Force Sub & Colorful Control Panel.",
+  "stack": "container",
   "env": {
-    "API_ID": {
-      "description": "Aapka Telegram API ID (my.telegram.org se lein)",
-      "required": true
-    },
-    "API_HASH": {
-      "description": "Aapka Telegram API Hash",
-      "required": true
-    },
-    "SESSION_STRING": {
-      "description": "Pyrogram String Session (Userbot Login Ke Liye)",
-      "required": true
-    },
-    "GEMINI_API_KEY": {
-      "description": "Aapki Gemini API Key (aistudio.google.com se lein)",
-      "required": true
-    },
-    "SYSTEM_PROMPT": {
-      "description": "Bot ki personality/behavior (Optional - Default preset rehenga)",
-      "required": false,
-      "value": "Aap ek friendly AI assistant ho jo mere behalf par polite aur natural tareeke se Hindi/Hinglish me reply karta hai."
-    }
+    "BOT_TOKEN": { "description": "Telegram Bot Token", "value": "", "required": true },
+    "FORCE_CHANNEL": { "description": "Channel Username for Force Sub", "value": "@YourChannelName", "required": false }
   },
-  "buildpacks": [
-    {
-      "url": "heroku/python"
-    }
-  ],
-  "formation": {
-    "worker": {
-      "quantity": 1,
-      "size": "eco"
-    }
-  }
+  "formation": { "worker": { "quantity": 1, "size": "eco" } }
 }
