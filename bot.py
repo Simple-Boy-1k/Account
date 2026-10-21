@@ -1,12 +1,13 @@
 import os
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from config import Config
 
-# Gemini API Configure
-genai.configure(api_key=Config.GEMINI_API_KEY)
+# Naye Google GenAI SDK Client Initialization
+ai_client = genai.Client(api_key=Config.GEMINI_API_KEY)
 
 # Telethon Client Setup
 client = TelegramClient(
@@ -21,7 +22,7 @@ AI_ENABLED = False
 async def turn_on_ai(event):
     global AI_ENABLED
     AI_ENABLED = True
-    await event.edit("✅ **Gemini AI Auto-Reply Activated (Smart Respectful Mode)!**")
+    await event.edit("✅ **Gemini AI Auto-Reply Activated (New SDK + Name + Emojis)!**")
 
 @client.on(events.NewMessage(pattern=r'\.aioff', outgoing=True))
 async def turn_off_ai(event):
@@ -35,37 +36,38 @@ async def auto_reply(event):
     if not AI_ENABLED or not event.raw_text:
         return
 
-    # Commands ko ignore karne ke liye
+    # Turn On / Turn Off command messages ko ignore karna
     if event.raw_text.startswith(".aion") or event.raw_text.startswith(".aioff"):
         return
 
-    # Broadcast channels ko ignore karega (Groups, Supergroups aur PM me chalega)
+    # Channels ko skip karke Groups, Supergroups aur PMs me reply karna
     if event.is_channel:
         chat = await event.get_chat()
         if not getattr(chat, 'megagroup', False) and not getattr(chat, 'gigagroup', False):
             return
 
     try:
-        # Sender ki details nikalna (Naam ke liye)
+        # Sender Details for Personalized Reply
         sender = await event.get_sender()
         user_name = sender.first_name if sender and sender.first_name else "Dost"
 
-        # Dynamic System Prompt
-        custom_system_prompt = (
+        sys_instruction = (
             f"{Config.SYSTEM_PROMPT}\n"
             f"Aap abhi '{user_name}' naam ke person se baat kar rahe ho. "
             f"Aapko unka naam '{user_name}' lekar poori izzat, respect aur friendly tone me baat karni hai. "
-            f"Ache ache aur natural emojis ka use karo aur Hinglish me short, sweet aur respectful reply do."
-        )
-
-        # Gemini Model initialization
-        model = genai.GenerativeModel(
-            model_name="gemini-3.8-flash",
-            system_instruction=custom_system_prompt
+            f"Ache ache aur natural emojis ka use karo aur Hinglish me short, energetic reply do."
         )
 
         async with event.client.action(event.chat_id, 'typing'):
-            response = model.generate_content(event.raw_text)
+            # Latest Google GenAI API Call
+            response = ai_client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=event.raw_text,
+                config=types.GenerateContentConfig(
+                    system_instruction=sys_instruction
+                )
+            )
+            
             if response and response.text:
                 await event.reply(response.text)
 
