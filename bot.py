@@ -142,8 +142,8 @@ async def check_subscription(bot, user_id):
     return False
 
 def generate_ai_response_safely(ai_client, text, sys_prompt, user_id=None):
-    # Using generalized stable identifiers for Google GenAI SDK
-    models_to_try = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-flash"]
+    # Standard official Gemini models
+    models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
     for model_name in models_to_try:
         try:
             response = ai_client.models.generate_content(
@@ -271,9 +271,9 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                         user_name = sender.first_name if sender and sender.first_name else "Dost"
                         
                         sys_prompt = (
-                            f"Aap real person '{my_firstname}' ho. Telegram chat me '{user_name}' se baat kar rahe ho. "
+                            f"Aap real person '{my_firstname}' ho. Telegram chat me '{user_name}' ne aapko message/tag kiya hai. "
                             f"Ekdum natural, human jaisa, cool, smart aur friendly Hinglish me jawab do. "
-                            f"Short aur engaging reply do with emojis like a real online friend."
+                            f"Short, witty aur realistic reply do with emojis exact online friend ki tarah."
                         )
 
                         await asyncio.sleep(0.5)
