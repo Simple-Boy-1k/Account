@@ -8,9 +8,20 @@ from config import Config
 # Gemini API Configure karna
 genai.configure(api_key=Config.GEMINI_API_KEY)
 
-# Latest aur sabse fast model
+# Automatic Model Finder (Jo bhi model available hoga, bot khud utha lega)
+selected_model = "gemini-1.5-flash"
+try:
+    for m in genai.list_models():
+        if 'generateContent' in m.supported_generation_methods:
+            selected_model = m.name
+            break
+except Exception as e:
+    print(f"Model select karte waqt error: {e}")
+
+print(f"==> Using Gemini Model: {selected_model}")
+
 model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
+    model_name=selected_model,
     system_instruction=Config.SYSTEM_PROMPT
 )
 
