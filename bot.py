@@ -26,7 +26,7 @@ AI_ENABLED = False
 async def turn_on_ai(event):
     global AI_ENABLED
     AI_ENABLED = True
-    await event.edit("✅ **Gemini AI Auto-Reply Activated!**")
+    await event.edit("✅ **Gemini AI Auto-Reply Activated (Groups + PM)!**")
 
 @client.on(events.NewMessage(pattern=r'\.aioff', outgoing=True))
 async def turn_off_ai(event):
@@ -34,12 +34,15 @@ async def turn_off_ai(event):
     AI_ENABLED = False
     await event.edit("❌ **Gemini AI Auto-Reply Deactivated!**")
 
-@client.on(events.NewMessage(incoming=True, func=lambda e: e.is_private))
+# Ab ye PM aur Groups dono ke incoming messages par reply karega
+@client.on(events.NewMessage(incoming=True, func=lambda e: e.is_private or e.is_group))
 async def auto_reply(event):
     global AI_ENABLED
     if not AI_ENABLED or not event.raw_text:
         return
 
+    # Agar koi group mein aapko tag kare ya reply kare tabhi reply kare (optional, taaki har message par spam na ho)
+    # Ya agar sabhi message par reply karwana hai toh yeh line hata sakte hain.
     try:
         async with event.client.action(event.chat_id, 'typing'):
             response = model.generate_content(event.raw_text)
