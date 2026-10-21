@@ -18,13 +18,20 @@ DATA_FILE = "user_sessions.json"
 running_userbots = {}
 user_logs = {}
 
+# ANSI Color Codes for Terminal Logs
+GREEN = "\033[92m"
+RED = "\033[91m"
+YELLOW = "\033[93m"
+CYAN = "\033[96m"
+RESET = "\033[0m"
+
 def load_db():
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, "r") as f:
                 return json.load(f)
         except Exception as e:
-            print(f"Error loading DB: {e}")
+            print(f"{RED}Error loading DB: {e}{RESET}")
     return {}
 
 def save_db():
@@ -44,7 +51,7 @@ def save_db():
         with open(DATA_FILE, "w") as f:
             json.dump(serializable_data, f)
     except Exception as e:
-        print(f"Error saving DB: {e}")
+        print(f"{RED}Error saving DB: {e}{RESET}")
 
 user_data = {}
 saved_db = load_db()
@@ -61,7 +68,7 @@ for uid_str, uinfo in saved_db.items():
         "active_chats": set(uinfo.get("active_chats", []))
     }
 
-def add_user_log(user_id, message):
+def add_user_log(user_id, message, is_error=False):
     timestamp = datetime.now().strftime("%H:%M:%S")
     log_entry = f"[{timestamp}] {message}"
     if user_id not in user_logs:
@@ -69,7 +76,14 @@ def add_user_log(user_id, message):
     user_logs[user_id].append(log_entry)
     if len(user_logs[user_id]) > 25:
         user_logs[user_id].pop(0)
-    print(f"User {user_id} -> {log_entry}")
+    
+    # Print with color in terminal
+    if is_error or "Glitch" in message or "Error" in message or "Failed" in message:
+        print(f"{RED}User {user_id} -> {log_entry}{RESET}")
+    elif "Online" in message or "Success" in message or "Activated" in message:
+        print(f"{GREEN}User {user_id} -> {log_entry}{RESET}")
+    else:
+        print(f"{CYAN}User {user_id} -> {log_entry}{RESET}")
 
 FORCE_CHANNEL = os.getenv("FORCE_CHANNEL", "@YourChannelName")
 OWNER_ID = int(os.getenv("OWNER_ID", "0"))
@@ -117,7 +131,7 @@ async def check_subscription(bot, user_id):
         if member.status in ["member", "administrator", "creator"]:
             return True
     except Exception as e:
-        print(f"Force Sub Check Error: {e}")
+        print(f"{RED}Force Sub Check Error: {e}{RESET}")
     return False
 
 def generate_ai_response_safely(ai_client, text, sys_prompt):
@@ -132,12 +146,13 @@ def generate_ai_response_safely(ai_client, text, sys_prompt):
             if response and response.text:
                 return response.text
         except Exception as err:
-            print(f"Model {model_name} failed/busy: {err}")
+            print(f"{YELLOW}Model {model_name} failed/busy: {err}{RESET}")
             continue
     return None
 
 async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
     while user_data.get(user_id, {}).get("is_active", False):
+        client = None
         try:
             if user_id in running_userbots:
                 try:
@@ -152,6 +167,14 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                 user_data[user_id] = {}
             if "active_chats" not in user_data[user_id]:
                 user_data[user_id]["active_chats"] = set()
+
+            # Connect explicitly to catch session errors immediately
+            await client.connect()
+            if not await client.is_user_authorized():
+                add_user_log(user_id, "Session String Expired or Invalid! Please re-enter setup data.", is_error=True)
+                user_data[user_id]["is_active"] = False
+                save_db()
+                break
 
             user_data[user_id]["is_active"] = True
             save_db()
@@ -185,7 +208,7 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                     save_db()
                 add_user_log(user_id, f"Deactivated in Chat: {chat_id}")
                 try:
-                    await event.edit("PR **[STOPPED] Auto-Reply Turned OFF for THIS Group!**")
+                    await event.edit("🟥 **[STOPPED] Auto-Reply Turned OFF for THIS Group!**")
                 except:
                     pass
 
@@ -251,7 +274,7 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                         reply_text = random.choice(SMART_FALLBACKS)
 
                 except Exception as api_err:
-                    add_user_log(user_id, f"Exception Handled -> Using Normal Msg: {api_err}")
+                    add_user_log(user_id, f"Exception Handled -> Using Normal Msg: {api_err}", is_error=True)
                     reply_text = random.choice(SMART_FALLBACKS)
 
                 if reply_text:
@@ -259,16 +282,20 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                         await event.reply(reply_text)
                         add_user_log(user_id, f"Reply Sent Successfully!")
                     except Exception as send_err:
-                        add_user_log(user_id, f"Send Error: {send_err}")
+                        add_user_log(user_id, f"Send Error: {send_err}", is_error=True)
                         await asyncio.sleep(2)
 
-            await client.start()
             running_userbots[user_id] = client
             await client.run_until_disconnected()
             
         except Exception as e:
-            add_user_log(user_id, f"Connection Glitch: {e}. Auto-reconnecting in 3 seconds...")
-            await asyncio.sleep(3)
+            add_user_log(user_id, f"Connection Glitch: {e}. Auto-reconnecting in 5 seconds...", is_error=True)
+            if client:
+                try:
+                    await client.disconnect()
+                except:
+                    pass
+            await asyncio.sleep(5)
             if not user_data.get(user_id, {}).get("is_active", False):
                 break
 
@@ -363,7 +390,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=get_user_panel_markup(user_id)
             )
         except Exception as e:
-            print(f"Edit error: {e}")
+            print(f"{RED}Edit error: {e}{RESET}")
 
     elif query.data == "activate_host":
         uinfo = user_data.get(user_id, {})
@@ -377,7 +404,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_data[user_id]["is_active"] = True
             save_db()
             
-            # Start Userbot in background
             asyncio.create_task(run_userbot(user_id, api_id, api_hash, session, gemini_key))
             
             try:
@@ -386,7 +412,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=get_user_panel_markup(user_id)
                 )
             except Exception as e:
-                print(f"Edit error: {e}")
+                print(f"{RED}Edit error: {e}{RESET}")
         else:
             await query.answer("❌ Pehle 'RE-ENTER SETUP DATA' par click karke details submit karein!", show_alert=True)
 
