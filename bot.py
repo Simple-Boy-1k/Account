@@ -146,7 +146,7 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                     pass
 
             client = TelegramClient(StringSession(session_string), int(api_id), api_hash)
-            ai_client = genai.Client(api_key=gemini_key)
+            ai_client = genai.Client(api_key=gemini_key) if gemini_key else None
             
             if user_id not in user_data:
                 user_data[user_id] = {}
@@ -185,7 +185,7 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                     save_db()
                 add_user_log(user_id, f"Deactivated in Chat: {chat_id}")
                 try:
-                    await event.edit("🟥 **[STOPPED] Auto-Reply Turned OFF for THIS Group!**")
+                    await event.edit("PR **[STOPPED] Auto-Reply Turned OFF for THIS Group!**")
                 except:
                     pass
 
@@ -231,7 +231,7 @@ async def run_userbot(user_id, api_id, api_hash, session_string, gemini_key):
                 add_user_log(user_id, f"Processing Msg in Chat {chat_id}: '{event.raw_text}'")
 
                 try:
-                    if ai_type == "GEMINI_AI":
+                    if ai_type == "GEMINI_AI" and ai_client:
                         sender = await event.get_sender()
                         user_name = sender.first_name if sender and sender.first_name else "Dost"
                         
@@ -286,7 +286,7 @@ async def stop_userbot(user_id):
 
 def get_user_panel_markup(user_id):
     is_active = user_data.get(user_id, {}).get("is_active", False)
-    has_session = "session" in user_data.get(user_id, {})
+    has_session = bool(user_data.get(user_id, {}).get("session"))
     reply_mode = user_data.get(user_id, {}).get("reply_mode", "TAG_ONLY")
     ai_type = user_data.get(user_id, {}).get("ai_type", "GEMINI_AI")
     
@@ -342,10 +342,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
     user_id = query.from_user.id
 
     if query.data == "check_sub":
+        await query.answer()
         if await check_subscription(context.bot, user_id):
             await query.edit_message_text(
                 "🟩 **VERIFIED SUCCESSFULLY!**\n\nWelcome! Apne control panel se manage karein:",
@@ -355,31 +355,38 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("Pehle channel join karein!", show_alert=True)
 
     elif query.data == "deactivate_host":
+        await query.answer("Stopping Hosting...")
         await stop_userbot(user_id)
         try:
             await query.edit_message_text(
                 "🟥 **HOSTING DEACTIVATED!**\n\nUserbot ab off hai.",
                 reply_markup=get_user_panel_markup(user_id)
             )
-        except:
-            pass
+        except Exception as e:
+            print(f"Edit error: {e}")
 
     elif query.data == "activate_host":
         uinfo = user_data.get(user_id, {})
-        if "session" in uinfo and uinfo["session"]:
+        session = uinfo.get("session")
+        api_id = uinfo.get("api_id")
+        api_hash = uinfo.get("api_hash")
+        gemini_key = uinfo.get("gemini_key")
+
+        if session and api_id and api_hash:
+            await query.answer("Starting Hosting...")
             user_data[user_id]["is_active"] = True
             save_db()
-            asyncio.create_task(run_userbot(
-                user_id, uinfo["api_id"], uinfo["api_hash"], uinfo["session"], uinfo["gemini_key"]
-            ))
-            await asyncio.sleep(0.5)
+            
+            # Start Userbot in background
+            asyncio.create_task(run_userbot(user_id, api_id, api_hash, session, gemini_key))
+            
             try:
                 await query.edit_message_text(
                     "🟩 **HOSTING ACTIVATED SUCCESSFULLY!**",
                     reply_markup=get_user_panel_markup(user_id)
                 )
-            except:
-                pass
+            except Exception as e:
+                print(f"Edit error: {e}")
         else:
             await query.answer("❌ Pehle 'RE-ENTER SETUP DATA' par click karke details submit karein!", show_alert=True)
 
@@ -427,6 +434,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer(f"Test Failed: {e}", show_alert=True)
 
     elif query.data == "view_my_logs":
+        await query.answer()
         logs = user_logs.get(user_id, [])
         logs_text = "\n".join(logs[-12:]) if logs else "Koi logs abhi tak record nahi hue hain."
         keyboard = [
@@ -443,6 +451,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
     elif query.data == "owner_panel":
+        await query.answer()
         if user_id != OWNER_ID:
             await query.answer("Sirf Owner ke liye hai!", show_alert=True)
             return
@@ -461,12 +470,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
     elif query.data == "main_menu":
+        await query.answer()
         try:
             await query.edit_message_text("👋 **VIP Hosting Dashboard:**", reply_markup=get_user_panel_markup(user_id))
         except:
             pass
 
     elif query.data == "start_setup":
+        await query.answer()
         if user_id not in user_data:
             user_data[user_id] = {}
         user_data[user_id]["step"] = "API_ID"
@@ -504,6 +515,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         session = user_data[user_id]["session"]
         gemini_key = text
 
+        user_data[user_id]["gemini_key"] = gemini_key
         user_data[user_id].pop("step", None)
         user_data[user_id]["is_active"] = True
         save_db()
@@ -522,7 +534,7 @@ async def startup_reconnect():
         if uinfo.get("is_active", True) and uinfo.get("session"):
             print(f"Auto-relaunching session for User: {uid}")
             asyncio.create_task(run_userbot(
-                uid, uinfo["api_id"], uinfo["api_hash"], uinfo["session"], uinfo["gemini_key"]
+                uid, uinfo["api_id"], uinfo["api_hash"], uinfo["session"], uinfo.get("gemini_key")
             ))
 
 if __name__ == "__main__":
