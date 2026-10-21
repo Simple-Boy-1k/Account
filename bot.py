@@ -5,7 +5,7 @@ import google.generativeai as genai
 
 from config import Config
 
-# Gemini API Configure karna
+# Gemini API Configure
 genai.configure(api_key=Config.GEMINI_API_KEY)
 
 # Telethon Client Setup
@@ -29,10 +29,14 @@ async def turn_off_ai(event):
     AI_ENABLED = False
     await event.edit("❌ **Gemini AI Auto-Reply Deactivated!**")
 
-@client.on(events.NewMessage(incoming=True))
+@client.on(events.NewMessage())
 async def auto_reply(event):
     global AI_ENABLED
     if not AI_ENABLED or not event.raw_text:
+        return
+
+    # Commands ko ignore karne ke liye
+    if event.raw_text.startswith(".aion") or event.raw_text.startswith(".aioff"):
         return
 
     # Broadcast channels ko ignore karega (Groups, Supergroups aur PM me chalega)
@@ -46,15 +50,15 @@ async def auto_reply(event):
         sender = await event.get_sender()
         user_name = sender.first_name if sender and sender.first_name else "Dost"
 
-        # Dynamic System Instruction - Naam, Respect aur Emojis ke sath
+        # Dynamic System Prompt
         custom_system_prompt = (
             f"{Config.SYSTEM_PROMPT}\n"
             f"Aap abhi '{user_name}' naam ke person se baat kar rahe ho. "
             f"Aapko unka naam '{user_name}' lekar poori izzat, respect aur friendly tone me baat karni hai. "
-            f"Ache ache aur natural emojis ka use karo aur Hinglish me lagbhag short aur energetic reply do."
+            f"Ache ache aur natural emojis ka use karo aur Hinglish me short, sweet aur respectful reply do."
         )
 
-        # Gemini Model initialization with dynamic prompt
+        # Gemini Model initialization
         model = genai.GenerativeModel(
             model_name="gemini-3.8-flash",
             system_instruction=custom_system_prompt
