@@ -8,12 +8,6 @@ from config import Config
 # Gemini API Configure karna
 genai.configure(api_key=Config.GEMINI_API_KEY)
 
-# Model name set kiya gaya hai jo logs ke hisab se perfectly chalega
-model = genai.GenerativeModel(
-    model_name="gemini-3.8-flash",
-    system_instruction=Config.SYSTEM_PROMPT
-)
-
 # Telethon Client Setup
 client = TelegramClient(
     StringSession(Config.SESSION_STRING),
@@ -27,7 +21,7 @@ AI_ENABLED = False
 async def turn_on_ai(event):
     global AI_ENABLED
     AI_ENABLED = True
-    await event.edit("✅ **Gemini AI Auto-Reply Activated (Groups + Supergroups + PM)!**")
+    await event.edit("✅ **Gemini AI Auto-Reply Activated (Smart Respectful Mode)!**")
 
 @client.on(events.NewMessage(pattern=r'\.aioff', outgoing=True))
 async def turn_off_ai(event):
@@ -35,23 +29,42 @@ async def turn_off_ai(event):
     AI_ENABLED = False
     await event.edit("❌ **Gemini AI Auto-Reply Deactivated!**")
 
-# PM, Groups aur Supergroups sabhi ke liye auto-reply
 @client.on(events.NewMessage(incoming=True))
 async def auto_reply(event):
     global AI_ENABLED
     if not AI_ENABLED or not event.raw_text:
         return
 
+    # Broadcast channels ko ignore karega (Groups, Supergroups aur PM me chalega)
     if event.is_channel:
         chat = await event.get_chat()
         if not getattr(chat, 'megagroup', False) and not getattr(chat, 'gigagroup', False):
             return
 
     try:
+        # Sender ki details nikalna (Naam ke liye)
+        sender = await event.get_sender()
+        user_name = sender.first_name if sender and sender.first_name else "Dost"
+
+        # Dynamic System Instruction - Naam, Respect aur Emojis ke sath
+        custom_system_prompt = (
+            f"{Config.SYSTEM_PROMPT}\n"
+            f"Aap abhi '{user_name}' naam ke person se baat kar rahe ho. "
+            f"Aapko unka naam '{user_name}' lekar poori izzat, respect aur friendly tone me baat karni hai. "
+            f"Ache ache aur natural emojis ka use karo aur Hinglish me lagbhag short aur energetic reply do."
+        )
+
+        # Gemini Model initialization with dynamic prompt
+        model = genai.GenerativeModel(
+            model_name="gemini-3.8-flash",
+            system_instruction=custom_system_prompt
+        )
+
         async with event.client.action(event.chat_id, 'typing'):
             response = model.generate_content(event.raw_text)
             if response and response.text:
                 await event.reply(response.text)
+
     except Exception as e:
         print(f"AI Error: {e}")
 
